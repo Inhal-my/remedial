@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<!-- UMSU_REMEDIAL_INDEX_V130 -->
+<html lang="id">
+
+<head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#003087">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Formulir Pendaftaran Remedial</title>
+    
+    <!-- Google Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
+    <!-- Preconnect -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Tailwind CSS (Minified CDN, No Compiler Delay) -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11" defer></script>
+    
+    <style>
+        /* Custom Colors & Utilities */
+        :root {
+            --primary-color: #003087;
+            --primary-hover: #00205b;
+        }
+        .bg-primary { background-color: var(--primary-color) !important; }
+        .text-primary { color: var(--primary-color) !important; }
+        .hover\:bg-primaryHover:hover { background-color: var(--primary-hover) !important; }
+        .focus\:ring-primary:focus { --tw-ring-color: var(--primary-color) !important; }
+        
+        body {
+            background-color: #f3f4f6;
+            -webkit-tap-highlight-color: transparent;
+            width: 100%;
+            overflow-x: hidden;
+        }
+
+        html {
+            width: 100%;
+            overflow-x: hidden;
+            box-sizing: border-box;
+        }
+
+        *, *::before, *::after {
+            box-sizing: inherit;
+        }
+
+        #app {
+            width: 100%;
+        }
+
+        .mobile-card {
+            min-height: calc(100vh - 40px);
+            padding-top: calc(1.5rem + env(safe-area-inset-top));
+        }
+
+        .text-wrap-safe {
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .course-scroll-box {
+            max-height: 50vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .mk-label span {
+            min-width: 0;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+        
+        .page {
+            display: none;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        .page.active { display: block; }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Floating Label Effect */
+        .input-group { position: relative; margin-bottom: 1.5rem; }
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            outline: none;
+            transition: all 0.2s;
+            font-size: 0.875rem;
+        }
+        .input-group input:focus, .input-group select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(0, 48, 135, 0.1);
+        }
+        .input-group label {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6b7280;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+            pointer-events: none;
+            background: white;
+            padding: 0 4px;
+        }
+        .input-group input:focus ~ label,
+        .input-group input:not(:placeholder-shown) ~ label,
+        .input-group select:focus ~ label,
+        .input-group select:valid ~ label {
+            top: 0;
+            font-size: 0.75rem;
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+        .input-group input[readonly] { background-color: #f9fafb; cursor: not-allowed; }
+
+        /* Custom File Input */
+        .file-drop-area {
+            border: 2px dashed #d1d5db;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            text-align: center;
+            background: #f9fafb;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .file-drop-area p {
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+        .file-drop-area:hover, .file-drop-area.dragover {
+            border-color: var(--primary-color);
+            background: #eff6ff;
+        }
+        .file-drop-area input[type="file"] {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0; left: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* Spinner Animation */
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
+
+        /* Safe area untuk notch HP */
+        @supports (padding: env(safe-area-inset-top)) {
+            body {
+                padding-left: env(safe-area-inset-left);
+                padding-right: env(safe-area-inset-right);
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+        }
+
+        /* Responsive HP */
+        @media (max-width: 480px) {
+            body {
+                font-size: 16px;
+            }
+
+            #app {
+                padding: 0.5rem !important;
+            }
+
+            .mobile-card {
+                min-height: calc(100vh - 16px);
+                padding: 1rem !important;
+                padding-top: calc(1rem + env(safe-area-inset-top)) !important;
+                margin-top: 0 !important;
+                margin-bottom: 0.5rem !important;
+                border-radius: 0.875rem !important;
+            }
+
+            .mobile-card img {
+                width: 3.25rem !important;
+            }
+
+            .mobile-card h1 {
+                font-size: 1.125rem !important;
+                line-height: 1.35 !important;
+            }
+
+            .mobile-card h2 {
+                font-size: 0.95rem !important;
+                line-height: 1.35 !important;
+            }
+
+            .input-group {
+                margin-bottom: 1.25rem;
+            }
+
+            .input-group input,
+            .input-group select {
+                font-size: 16px;
+                padding: 0.72rem 0.875rem;
+            }
+
+            .input-group label {
+                max-width: calc(100% - 1.75rem);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .file-drop-area {
+                padding: 1rem 0.75rem;
+            }
+
+            .file-drop-area .material-icons {
+                font-size: 1.75rem !important;
+            }
+
+            button {
+                min-height: 44px;
+            }
+
+            .swal2-popup {
+                width: calc(100vw - 2rem) !important;
+                max-width: 100% !important;
+                font-size: 0.95rem !important;
+            }
+
+            .course-scroll-box {
+                max-height: 55vh;
+                padding: 0.75rem !important;
+            }
+
+            .mk-label {
+                padding: 0.625rem !important;
+            }
+
+            .mk-label input[type="checkbox"] {
+                flex: 0 0 auto;
+            }
+        }
+
+        @media (max-width: 360px) {
+            #app {
+                padding: 0.375rem !important;
+            }
+
+            .mobile-card {
+                padding: 0.875rem !important;
+                padding-top: calc(0.875rem + env(safe-area-inset-top)) !important;
+            }
+
+            .mobile-card h1 {
+                font-size: 1rem !important;
+            }
+
+            .mobile-card h2,
+            .mobile-card p,
+            .input-group label {
+                font-size: 0.8rem !important;
+            }
+
+            .course-scroll-box {
+                max-height: 58vh;
+            }
+        }
+    </style>
+</head>
+
+<body class="text-gray-800 font-sans min-h-screen flex flex-col">
+    <div class="w-full max-w-xl mx-auto p-4 box-border" id="app">
+        <!-- PAGE: INDEX -->
+        <div id="page-index" class="page active">
+            <div class="mobile-card bg-white rounded-xl shadow-lg p-6 my-2 border-t-4 border-primary">
+                
+                <div class="flex justify-center mb-4">
+                    <img src="https://i.imgur.com/VDy2lSE.png" alt="Logo UMSU" class="w-16 h-auto" loading="lazy" decoding="async">
+                </div>
+
+                <div class="text-center text-primary mb-6">
+                    <h1 class="text-xl font-extrabold tracking-tight">Pendaftaran Remedial</h1>
+                    <h2 class="text-md font-semibold opacity-90">Semester Ganjil 2026-2027</h2>
+                    <p class="text-xs mt-1 text-gray-500 font-medium text-wrap-safe">Fakultas Kedokteran & Ilmu Kesehatan UMSU</p>
+                </div>
+
+                <form id="mainForm" onsubmit="event.preventDefault();">
+                    
+                    <div class="input-group" style="margin-bottom: 0.25rem;">
+                        <input type="text" id="custID" placeholder=" " pattern="[0-9]{10}" required inputmode="numeric" autocomplete="off" maxlength="10">
+                        <label for="custID">NPM (10 Digit Angka) <span class="text-red-500">*</span></label>
+                    </div>
+                    <div style="min-height: 1.25rem; margin-bottom: 0.75rem;" class="px-1">
+                        <small id="search_namalengkap" class="block text-xs font-semibold text-primary"></small>
+                    </div>
+
+                    <div class="input-group">
+                        <input type="text" id="namalengkap" placeholder=" " readonly required>
+                        <label for="namalengkap">Nama Lengkap</label>
+                    </div>
+
+                    <div class="input-group mt-2">
+                        <input type="email" id="email" placeholder=" " pattern=".+@gmail\.com$" required inputmode="email" autocomplete="email">
+                        <label for="email">Email Gmail Aktif <span class="text-red-500">*</span></label>
+                    </div>
+
+                    <div class="input-group">
+                        <input type="text" id="hp" placeholder=" " pattern="[0-9]{10,13}" required inputmode="tel" autocomplete="tel" maxlength="13">
+                        <label for="hp">No. HP/WhatsApp <span class="text-red-500">*</span></label>
+                    </div>
+
+                    <div class="input-group">
+                        <select id="angkatan" required>
+                            <option value="" disabled selected></option>
+                            <option value="2026">2026</option>
+                            <option value="2025">2025</option>
+                            <option value="2024">2024</option>
+                            <option value="2023">2023</option>
+                            <option value="Lainnya">Lainnya</option>
+                        </select>
+                        <label for="angkatan">Angkatan <span class="text-red-500">*</span></label>
+                    </div>
+
+                    <!-- Upload Foto -->
+                    <div class="mb-5">
+                        <span class="block text-sm font-bold text-gray-700 mb-2">Pas Foto 3x4 (Warna) <span class="text-red-500">*</span></span>
+                        <div class="file-drop-area" id="dropAreaFoto">
+                            <i class="material-icons text-3xl text-gray-400 mb-1">add_a_photo</i>
+                            <p class="text-sm text-gray-500 font-medium" id="fileNameFoto">Ketuk untuk memilih Foto (JPG/PNG)</p>
+                            <input type="file" id="pasFotoInput" accept="image/jpeg,image/png,image/jpg" required>
+                        </div>
+                        <small id="pasFotoFeedback" class="block mt-1 text-xs text-red-500 font-medium"></small>
+                    </div>
+
+                    <!-- Upload KRS -->
+                    <div class="mb-6">
+                        <span class="block text-sm font-bold text-gray-700 mb-2">KRS Semester Ganjil <span class="text-red-500">*</span></span>
+                        <div class="file-drop-area" id="dropAreaKrs">
+                            <i class="material-icons text-3xl text-gray-400 mb-1">picture_as_pdf</i>
+                            <p class="text-sm text-gray-500 font-medium" id="fileNameKrs">Ketuk untuk memilih PDF (Maks 2MB)</p>
+                            <input type="file" id="krsInput" accept="application/pdf" required>
+                        </div>
+                        <small id="krsFeedback" class="block mt-1 text-xs text-red-500 font-medium"></small>
+                    </div>
+
+                    <!-- Tombol Lanjut -->
+                    <button id="lanjutButton" type="button" disabled class="w-full bg-primary text-white font-bold py-3 px-4 rounded-lg shadow-lg opacity-50 cursor-not-allowed transition duration-300 flex justify-center items-center gap-2">
+                        <span>Lanjut</span>
+                        <i class="material-icons text-sm">arrow_forward</i>
+                    </button>
+                    
+                </form>
+            </div>
+        </div>
+
+        <!-- PAGE: SEMESTER 1 -->
+        <div id="page-semester1" class="page hidden">
+            <div class="mobile-card bg-white rounded-xl shadow-lg p-6 my-2 border-t-4 border-primary">
+                <h3 class="text-center font-bold text-xl text-primary mb-4">Mata Kuliah 2026</h3>
+                <div id="semester1-content" class="mt-3"></div>
+                <button id="submitSemester1" type="button" class="mt-6 w-full bg-primary text-white font-bold py-3 px-4 rounded-lg shadow-lg transition duration-300 flex justify-center items-center gap-2">
+                    <span>Kirim Pendaftaran</span><i class="material-icons text-sm">send</i>
+                </button>
+            </div>
+        </div>
+
+        <!-- PAGE: SEMESTER 3 -->
+        <div id="page-semester3" class="page hidden">
+            <div class="mobile-card bg-white rounded-xl shadow-lg p-6 my-2 border-t-4 border-primary">
+                <h3 class="text-center font-bold text-xl text-primary mb-4">Mata Kuliah 2025</h3>
+                <div id="semester3-content" class="mt-3"></div>
+
+                <div id="semester3NextChoiceContainer" class="mt-6 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <p class="text-sm font-bold text-primary mb-1">Ada MK semester 1 yang didaftarkan?</p>
+                    <p class="text-xs text-gray-600 mb-3">MK semester bawah wajib tertera di KRS</p>
+                    <select id="semester3NextChoice" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm font-medium">
+                        <option value="">-- Pilih Jawaban --</option>
+                        <option value="ADA">Ya, ADA</option>
+                        <option value="TIDAK ADA">TIDAK ADA</option>
+                    </select>
+                </div>
+                <div id="semester3ButtonContainer" class="mt-6 hidden"></div>
+            </div>
+        </div>
+
+        <!-- PAGE: SEMESTER 5 -->
+        <div id="page-semester5" class="page hidden">
+            <div class="mobile-card bg-white rounded-xl shadow-lg p-6 my-2 border-t-4 border-primary">
+                <h3 class="text-center font-bold text-xl text-primary mb-4">Mata Kuliah 2024</h3>
+                <div id="semester5-content" class="mt-3"></div>
+
+                <div id="semester5NextChoiceContainer" class="mt-6 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <p class="text-sm font-bold text-primary mb-1">Ada MK semester 3/1 yang didaftarkan?</p>
+                    <p class="text-xs text-gray-600 mb-3">MK semester bawah wajib tertera di KRS</p>
+                    <select id="semester5NextChoice" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm font-medium">
+                        <option value="">-- Pilih Jawaban --</option>
+                        <option value="ADA">Ya, ADA</option>
+                        <option value="TIDAK ADA">TIDAK ADA</option>
+                    </select>
+                </div>
+                <div id="semester5ButtonContainer" class="mt-6 hidden"></div>
+            </div>
+        </div>
+
+        <!-- PAGE: SEMESTER 7 -->
+        <div id="page-semester7" class="page hidden">
+            <div class="mobile-card bg-white rounded-xl shadow-lg p-6 my-2 border-t-4 border-primary">
+                <h3 class="text-center font-bold text-xl text-primary mb-4">Mata Kuliah 2023</h3>
+                <div id="semester7-content" class="mt-3"></div>
+
+                <div id="semester7NextChoiceContainer" class="mt-6 bg-blue-50 p-4 rounded-lg border border-blue-100 hidden">
+                    <p class="text-sm font-bold text-primary mb-1">Ada MK semester 5/3/1 yang didaftarkan?</p>
+                    <p class="text-xs text-gray-600 mb-3">MK semester bawah wajib tertera di KRS</p>
+                    <select id="semester7NextChoice" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm font-medium">
+                        <option value="">-- Pilih Jawaban --</option>
+                        <option value="ADA">Ya, ADA</option>
+                        <option value="TIDAK ADA">TIDAK ADA</option>
+                    </select>
+                </div>
+                <div id="semester7ButtonContainer" class="mt-6 hidden"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- JAVASCRIPT LOGIC (Vanilla JS, Super Fast) -->
+    <script>
+        window.existingCourses = null;
+        window.courseCache = {};
+        let blockedRegistrationMessage = '';
+        
+        // Cek koneksi GAS
+        if (typeof google === 'undefined') {
+            Swal.fire({ icon: 'error', title: 'Akses Ditolak', text: 'Buka form ini melalui link resmi UMSU.' });
+            document.getElementById('app').style.display = 'none';
+        } else {
+            google.script.run
+                .withSuccessHandler(res => {
+                    if(!res.isAvailable) {
+                        document.getElementById('app').style.display = 'none';
+                        Swal.fire({icon: 'info', title: 'Tutup', text: res.message, allowOutsideClick: false}).then(()=>window.location.href='about:blank');
+                    }
+                })
+                .checkFormAvailability();
+        }
+
+        // ==========================================
+        // 1. CLIENT-SIDE COMPRESSION & VALIDATION
+        // ==========================================
+        const fileStore = { fotoBase64: null, krsBase64: null };
+
+        function compressImage(file, callback) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const MAX_WIDTH = 800;
+                    let width = img.width, height = img.height;
+                    
+                    if (width > MAX_WIDTH) {
+                        height = Math.round(height * (MAX_WIDTH / width));
+                        width = MAX_WIDTH;
+                    }
+                    
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width; canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // Compress to 70% Quality JPEG
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    callback(dataUrl.split(',')[1]); // Return Base64 only
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Foto Input Event
+        document.getElementById('pasFotoInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const feedback = document.getElementById('pasFotoFeedback');
+            const nameLabel = document.getElementById('fileNameFoto');
+            
+            if(!file) return;
+            
+            if(!file.type.startsWith('image/')) {
+                feedback.textContent = 'Harus berupa gambar (JPG/PNG)';
+                this.value = ''; nameLabel.textContent = 'Ketuk untuk memilih Foto';
+                fileStore.fotoBase64 = null;
+                checkAllFields(); return;
+            }
+            
+            feedback.textContent = 'Memproses gambar...';
+            nameLabel.textContent = file.name;
+            nameLabel.classList.add('text-primary', 'font-bold');
+            
+            // Auto Compress!
+            compressImage(file, function(base64) {
+                fileStore.fotoBase64 = base64;
+                feedback.innerHTML = '<span class="text-green-600">✓ Gambar siap</span>';
+                checkAllFields();
+            });
+        });
+
+        // KRS Input Event (PDF Max 2MB)
+        document.getElementById('krsInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const feedback = document.getElementById('krsFeedback');
+            const nameLabel = document.getElementById('fileNameKrs');
+            
+            if(!file) return;
+            
+            if(file.type !== 'application/pdf') {
+                feedback.textContent = 'Harus berformat PDF';
+                this.value = ''; nameLabel.textContent = 'Ketuk untuk memilih PDF';
+                fileStore.krsBase64 = null;
+                checkAllFields(); return;
+            }
+            
+            if(file.size > 2 * 1024 * 1024) {
+                feedback.textContent = 'Ukuran PDF terlalu besar (Maks 2MB). Silakan kompres PDF Anda terlebih dahulu.';
+                this.value = ''; nameLabel.textContent = 'Ketuk untuk memilih PDF';
+                fileStore.krsBase64 = null;
+                checkAllFields(); return;
+            }
+            
+            nameLabel.textContent = file.name;
+            nameLabel.classList.add('text-primary', 'font-bold');
+            
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                fileStore.krsBase64 = evt.target.result.split(',')[1];
+                feedback.innerHTML = '<span class="text-green-600">✓ PDF siap</span>';
+                checkAllFields();
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // ==========================================
+        // 2. FORM LOGIC & AUTOCOMPLETE
+        // ==========================================
+        function checkAllFields() {
+            const npm = document.getElementById('custID').value;
+            const nama = document.getElementById('namalengkap').value;
+            const email = document.getElementById('email').value;
+            const hp = document.getElementById('hp').value;
+            const angkatan = document.getElementById('angkatan').value;
+            
+            const isNpmValid = /^[0-9]{10}$/.test(npm);
+            const isEmailValid = /^[^\s@]+@gmail\.com$/.test(email);
+            const isHpValid = /^[0-9]{10,13}$/.test(hp);
+            
+            const btn = document.getElementById('lanjutButton');
+            
+            if(isNpmValid && nama && isEmailValid && isHpValid && angkatan && fileStore.fotoBase64 && fileStore.krsBase64 && !blockedRegistrationMessage) {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                btn.classList.add('hover:bg-primaryHover');
+            } else {
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+                btn.classList.remove('hover:bg-primaryHover');
+            }
+        }
+
+        document.getElementById('custID').addEventListener('input', function() {
+            const npm = this.value.trim();
+            const info = document.getElementById('search_namalengkap');
+            const namaEl = document.getElementById('namalengkap');
+            
+            if(npm.length !== 10) {
+                namaEl.value = ''; info.textContent = ''; blockedRegistrationMessage = ''; checkAllFields(); return;
+            }
+            
+            info.textContent = 'Mencari data...'; info.className = 'block mt-1 text-xs font-semibold text-blue-500';
+            
+            // Get Name, existing courses, dan status pendaftaran (cek dini) secara paralel
+            Promise.all([
+                new Promise(resolve => google.script.run.withSuccessHandler(resolve).searchNamalengkapByCustomerId({custID: npm})),
+                new Promise(resolve => google.script.run.withSuccessHandler(resolve).getExistingCourses(npm)),
+                new Promise(resolve => google.script.run.withSuccessHandler(resolve).withFailureHandler(() => resolve({status: 'ok'})).checkPendaftaranStatusByNpm(npm))
+            ]).then(([nameRes, coursesRes, statusRes]) => {
+                if (statusRes && statusRes.status === 'already_registered') {
+                    blockedRegistrationMessage = statusRes.message || 'Maaf, NPM anda sudah terdaftar sebelumnya. Pendaftaran hanya satu kali saja.';
+                    namaEl.value = '';
+                    info.textContent = '✗ ' + blockedRegistrationMessage;
+                    info.className = 'block mt-1 text-xs font-semibold text-red-500';
+                    window.existingCourses = [];
+                    checkAllFields();
+                    Swal.fire({icon: 'warning', title: 'Perhatian', text: blockedRegistrationMessage});
+                    return;
+                }
+
+                blockedRegistrationMessage = '';
+
+                if(nameRes && nameRes.length > 0) {
+                    namaEl.value = nameRes[0];
+                    info.textContent = '✓ Data ditemukan'; info.className = 'block mt-1 text-xs font-semibold text-green-600';
+                } else {
+                    namaEl.value = '';
+                    info.textContent = '✗ NPM tidak terdaftar'; info.className = 'block mt-1 text-xs font-semibold text-red-500';
+                }
+                
+                // Save existing courses for hiding logic later
+                window.existingCourses = (coursesRes || []).map(c => String(c).trim().toLowerCase());
+                checkAllFields();
+            });
+        });
+
+        document.getElementById('email').addEventListener('input', checkAllFields);
+        document.getElementById('hp').addEventListener('input', checkAllFields);
+        document.getElementById('angkatan').addEventListener('change', function() {
+            checkAllFields();
+            const val = this.value;
+            let sem = '';
+            if(val === '2026') sem = '1';
+            else if(val === '2025') sem = '3';
+            else if(val === '2024') sem = '5';
+            else if(val === '2023' || val === 'Lainnya') sem = '7';
+            if(sem) prefetchCourses(sem);
+        });
+
+        document.getElementById('lanjutButton').addEventListener('click', function() {
+            const val = document.getElementById('angkatan').value;
+            let sem = '';
+            if(val === '2026') sem = '1';
+            else if(val === '2025') sem = '3';
+            else if(val === '2024') sem = '5';
+            else if(val === '2023' || val === 'Lainnya') sem = '7';
+            showPage('semester' + sem);
+        });
+
+        // ==========================================
+        // 3. UI NAVIGATION & COURSES (Fast Render)
+        // ==========================================
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById('page-' + pageId).classList.add('active');
+            window.scrollTo(0,0);
+            
+            if (pageId.startsWith('semester')) {
+                const sem = pageId.replace('semester', '');
+                loadMataKuliahOptions(sem);
+            }
+        }
+
+        function prefetchCourses(sem) {
+            if(courseCache[sem]) return;
+            courseCache[sem] = { loading: true, data: null };
+            google.script.run.withSuccessHandler(data => {
+                courseCache[sem] = { loading: false, data: data };
+                const cont = document.getElementById(`semester${sem}-content`);
+                if(cont && cont.dataset.waiting) {
+                    displayMataKuliahOptions(sem, data);
+                    delete cont.dataset.waiting;
+                }
+            }).getMataKuliahFromSheet(sem);
+        }
+
+        function loadMataKuliahOptions(sem) {
+            const cont = document.getElementById(`semester${sem}-content`);
+            if(courseCache[sem] && !courseCache[sem].loading) {
+                displayMataKuliahOptions(sem, courseCache[sem].data);
+            } else {
+                cont.innerHTML = `<div class="text-center py-6 text-primary"><div class="animate-spin inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full mb-2"></div><p class="text-sm font-bold">Memuat Mata Kuliah...</p></div>`;
+                cont.dataset.waiting = 'true';
+                if(!courseCache[sem]) prefetchCourses(sem);
+            }
+        }
+
+        function displayMataKuliahOptions(sem, options) {
+            const cont = document.getElementById(`semester${sem}-content`);
+            let html = `<div class="course-scroll-box bg-gray-50 border border-gray-200 rounded-lg p-4">`;
+            
+            let availableCount = 0;
+            if(options && options.length > 0) {
+                options.forEach((opt, idx) => {
+                    const safeOpt = String(opt).replace(/['"]/g, '');
+                    const safeOptLower = safeOpt.trim().toLowerCase();
+                    
+                    // Hide if course is already in existingCourses
+                    const isExisting = window.existingCourses && window.existingCourses.includes(safeOptLower);
+                    
+                    if(!isExisting) {
+                        availableCount++;
+                        html += `
+                        <label class="mk-label flex items-start mb-3 p-2 rounded hover:bg-blue-50 cursor-pointer transition border border-transparent hover:border-blue-200">
+                            <input type="checkbox" class="mk-option mt-1 mr-3 h-5 w-5 text-primary rounded border-gray-300 focus:ring-primary" data-semester="${sem}" data-slot="${idx+1}" value="${safeOpt}">
+                            <span class="text-sm font-medium text-gray-800 leading-tight">${safeOpt}</span>
+                        </label>`;
+                    }
+                });
+            }
+            
+            if(availableCount === 0) {
+                if(options && options.length > 0) {
+                    html += `<p class="text-green-600 font-bold text-center">Semua MK pada semester ini sudah Anda pilih sebelumnya.</p>`;
+                } else {
+                    html += `<p class="text-red-500 font-bold text-center">Tidak ada MK tersedia</p>`;
+                }
+            }
+            html += `</div>`;
+            cont.innerHTML = html;
+            
+            Array.from(document.querySelectorAll(`.mk-option[data-semester="${sem}"]`)).forEach(el => {
+                el.addEventListener('change', () => updateSubmitVisibility(sem));
+            });
+            updateSubmitVisibility(sem);
+        }
+
+        function saveSemesterSelections(sem) {
+            const max = 7;
+            const positions = new Array(max).fill('');
+            Array.from(document.querySelectorAll(`.mk-option[data-semester="${sem}"]`)).forEach(cb => {
+                const slotIdx = parseInt(cb.dataset.slot) - 1;
+                if(cb.checked && slotIdx >= 0 && slotIdx < max) positions[slotIdx] = cb.value;
+            });
+            sessionStorage.setItem(`sem${sem}Data`, JSON.stringify(positions));
+        }
+
+        function updateSubmitVisibility(sem) {
+            if(sem === '3') {
+                const choice = document.getElementById('semester3NextChoice').value;
+                const btnCont = document.getElementById('semester3ButtonContainer');
+                btnCont.innerHTML = '';
+                
+                if(choice === 'ADA') {
+                    btnCont.innerHTML = `<button type="button" class="w-full bg-primary text-white font-bold py-3 rounded-lg shadow-lg" onclick="saveSemesterSelections('3'); showPage('semester1');">Lanjut ke Semester 1</button>`;
+                    btnCont.classList.remove('hidden');
+                } else if(choice === 'TIDAK ADA') {
+                    btnCont.innerHTML = `<button type="button" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg shadow-lg flex justify-center items-center gap-2" onclick="saveSemesterSelections('3'); submitFinal('3');"><span>Kirim Pendaftaran</span><i class="material-icons text-sm">send</i></button>`;
+                    btnCont.classList.remove('hidden');
+                } else { btnCont.classList.add('hidden'); }
+            }
+            else if(sem === '5') {
+                const choice = document.getElementById('semester5NextChoice').value;
+                const btnCont = document.getElementById('semester5ButtonContainer');
+                btnCont.innerHTML = '';
+                
+                if(choice === 'ADA') {
+                    btnCont.innerHTML = `<button type="button" class="w-full bg-primary text-white font-bold py-3 rounded-lg shadow-lg" onclick="saveSemesterSelections('5'); showPage('semester3');">Lanjut ke Semester 3</button>`;
+                    btnCont.classList.remove('hidden');
+                } else if(choice === 'TIDAK ADA') {
+                    btnCont.innerHTML = `<button type="button" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg shadow-lg flex justify-center items-center gap-2" onclick="saveSemesterSelections('5'); submitFinal('5');"><span>Kirim Pendaftaran</span><i class="material-icons text-sm">send</i></button>`;
+                    btnCont.classList.remove('hidden');
+                } else { btnCont.classList.add('hidden'); }
+            }
+            else if(sem === '7') {
+                document.getElementById('semester7NextChoiceContainer').classList.remove('hidden');
+                const choice = document.getElementById('semester7NextChoice').value;
+                const btnCont = document.getElementById('semester7ButtonContainer');
+                btnCont.innerHTML = '';
+                
+                if(choice === 'ADA') {
+                    btnCont.innerHTML = `<button type="button" class="w-full bg-primary text-white font-bold py-3 rounded-lg shadow-lg" onclick="saveSemesterSelections('7'); showPage('semester5');">Lanjut ke Semester 5</button>`;
+                    btnCont.classList.remove('hidden');
+                } else if(choice === 'TIDAK ADA') {
+                    btnCont.innerHTML = `<button type="button" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg shadow-lg flex justify-center items-center gap-2" onclick="saveSemesterSelections('7'); submitFinal('7');"><span>Kirim Pendaftaran</span><i class="material-icons text-sm">send</i></button>`;
+                    btnCont.classList.remove('hidden');
+                } else { btnCont.classList.add('hidden'); }
+            }
+        }
+
+        document.getElementById('semester3NextChoice').addEventListener('change', () => updateSubmitVisibility('3'));
+        document.getElementById('semester5NextChoice').addEventListener('change', () => updateSubmitVisibility('5'));
+        document.getElementById('semester7NextChoice').addEventListener('change', () => updateSubmitVisibility('7'));
+        
+        document.getElementById('submitSemester1').addEventListener('click', function() {
+            saveSemesterSelections('1');
+            submitFinal('1');
+        });
+
+        // ==========================================
+        // 4. FINAL SUBMIT (Super Fast Base64 Bypass)
+        // ==========================================
+        function submitFinal(currentSem) {
+            let hasMK = false;
+            const formData = {
+                custID: document.getElementById('custID').value,
+                namalengkap: document.getElementById('namalengkap').value,
+                email: document.getElementById('email').value,
+                hp: document.getElementById('hp').value,
+                angkatan: document.getElementById('angkatan').value,
+                semester: currentSem,
+                mataKuliah: []
+            };
+
+            // Grab all saved data
+            ['1','3','5','7'].forEach(s => {
+                const saved = sessionStorage.getItem(`sem${s}Data`);
+                if(saved) {
+                    JSON.parse(saved).forEach((mk, idx) => {
+                        if(mk) {
+                            formData[`mkSem${s}${idx+1}`] = mk;
+                            formData.mataKuliah.push(mk);
+                            hasMK = true;
+                        }
+                    });
+                }
+            });
+
+            if(!hasMK) {
+                Swal.fire({icon: 'warning', title: 'Perhatian', text: 'Pilih minimal 1 Mata Kuliah.'});
+                return;
+            }
+
+            Swal.fire({
+                title: 'Mengirim Data...',
+                text: 'Proses sedang berjalan',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            // Langsung lempar Base64 ke server (tanpa FileReader tambahan)
+            const fotoFile = document.getElementById('pasFotoInput').files[0];
+            const krsFile = document.getElementById('krsInput').files[0];
+
+            Promise.all([
+                new Promise((res, rej) => google.script.run.withSuccessHandler(r => r.status==='success'?res(r.fileUrl):rej(r.message)).withFailureHandler(rej).uploadFileToDrive(fileStore.fotoBase64, fotoFile.name, fotoFile.type)),
+                new Promise((res, rej) => google.script.run.withSuccessHandler(r => r.status==='success'?res(r.fileUrl):rej(r.message)).withFailureHandler(rej).uploadFileToDrive(fileStore.krsBase64, krsFile.name, krsFile.type))
+            ]).then(urls => {
+                formData.pasfotoUrl = urls[0];
+                formData.krsUrl = urls[1];
+                
+                google.script.run
+                    .withSuccessHandler(response => {
+                        if(response.status === 'success' || response.status === 'partial_success') {
+                            Swal.fire({icon: 'success', title: 'Berhasil!', text: response.message}).then(() => location.reload());
+                        } else {
+                            Swal.fire({icon: 'error', title: 'Gagal', text: response.message});
+                        }
+                    })
+                    .withFailureHandler(err => Swal.fire({icon: 'error', title: 'Gagal', text: String(err)}))
+                    .submitFormData(formData);
+            }).catch(err => {
+                Swal.fire({icon: 'error', title: 'Gagal Upload File', text: String(err)});
+            });
+        }
+    </script>
+</body>
+</html>
