@@ -23,7 +23,16 @@ function doGet(e) {
     var title = '';
     if (page === 'index') title = 'Formulir Pendaftaran Remedial';
     else if (page === 'upload') title = 'Formulir Unggah Bukti Pembayaran';
+    else if (page === 'dashboard') title = 'Dashboard Rekapitulasi Remedial';
     else return HtmlService.createHtmlOutput('Halaman tidak ditemukan');
+
+    if (page === 'dashboard') {
+        return HtmlService.createHtmlOutputFromFile('dashboard')
+            .setTitle(title)
+            .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+            .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    }
+
     return HtmlService.createHtmlOutputFromFile(page)
         .setTitle(title)
         .addMetaTag('viewport', 'width=device-width, initial-scale=1')
@@ -136,8 +145,12 @@ function buildPendaftaranSupabaseRow_(headers, row) {
         mkStartIdx = baseIndices.length ? Math.max.apply(null, baseIndices) + 1 : 9;
     }
     var mkList = [];
-    for (var i = mkStartIdx; i < row.length; i++) {
-        if (row[i] && String(row[i]).trim() !== '') mkList.push(String(row[i]).trim());
+    var mkSlotRanges = [[9, 36], [71, 91]]; // MK ganjil (J-AK) + MK genap (BS-CM)
+    for (var r = 0; r < mkSlotRanges.length; r++) {
+        var startI = mkStartIdx > mkSlotRanges[r][0] ? mkStartIdx : mkSlotRanges[r][0];
+        for (var i = startI; i <= mkSlotRanges[r][1] && i < row.length; i++) {
+            if (row[i] && String(row[i]).trim() !== '') mkList.push(String(row[i]).trim());
+        }
     }
     return {
         timestamp: row[idxTimestamp] || null,
@@ -377,31 +390,21 @@ function setupWaAutomationTriggers() {
  */
 function checkFormAvailability() {
     try {
-        var ss = SpreadsheetApp.openById(getSpreadsheetId());
-        var dmSheet = ss.getSheetByName('DM');
-        if (!dmSheet) return { isAvailable: true };
+        ensureConfigSeeded_();
+        var periode = getConfig_(CONFIG_KEYS.periode) || 'ganjil';
+        var tahunAjaran = getConfig_(CONFIG_KEYS.tahunAjaran) || '';
+        var openDate = parseConfigDate_(getConfig_(CONFIG_KEYS.pendaftaranBuka));
+        var closeDate = parseConfigDate_(getConfig_(CONFIG_KEYS.pendaftaranTutup));
+        if (!openDate || !closeDate) return { isAvailable: true, periode: periode, tahunAjaran: tahunAjaran };
 
-        // Batch baca G2 dan G4 sekaligus (1 API call, bukan 2)
-        var dateRange = dmSheet.getRange('G2:G4').getValues();
-        var openDateVal = dateRange[0][0];  // G2 = Waktu Mulai
-        var closeDateVal = dateRange[2][0];  // G4 = Waktu Tutup
-
-        var openDate = parseDateValue_(openDateVal);
-        var closeDate = parseDateValue_(closeDateVal);
         var now = new Date();
-
-        if (isNaN(openDate.getTime()) || isNaN(closeDate.getTime())) {
-            Logger.log('Invalid date in DM sheet. Open: ' + openDateVal + ', Close: ' + closeDateVal);
-            return { isAvailable: true };
-        }
-
         if (now >= openDate && now <= closeDate) {
-            return { isAvailable: true };
+            return { isAvailable: true, periode: periode, tahunAjaran: tahunAjaran };
         } else {
             var message = now < openDate
                 ? ('Pendaftaran remedial belum dibuka. Pendaftaran akan dibuka pada ' + Utilities.formatDate(openDate, Session.getScriptTimeZone(), 'dd MMMM yyyy, HH:mm') + ' WIB.')
                 : ('Pendaftaran remedial sudah ditutup pada ' + Utilities.formatDate(closeDate, Session.getScriptTimeZone(), 'dd MMMM yyyy, HH:mm') + ' WIB.');
-            return { isAvailable: false, message: message };
+            return { isAvailable: false, message: message, periode: periode, tahunAjaran: tahunAjaran };
         }
     } catch (error) {
         Logger.log('Error in checkFormAvailability: ' + error.message);
@@ -411,22 +414,12 @@ function checkFormAvailability() {
 
 function checkUploadFormAvailability() {
     try {
-        var ss = SpreadsheetApp.openById(getSpreadsheetId());
-        var dmSheet = ss.getSheetByName('DM');
-        if (!dmSheet) return { isAvailable: true };
+        ensureConfigSeeded_();
+        var openDate = parseConfigDate_(getConfig_(CONFIG_KEYS.uploadBuka));
+        var closeDate = parseConfigDate_(getConfig_(CONFIG_KEYS.uploadTutup));
+        if (!openDate || !closeDate) return { isAvailable: true };
 
-        var dateRange = dmSheet.getRange('G8:G10').getValues();
-        var openDateVal = dateRange[0][0];
-        var closeDateVal = dateRange[2][0];
-        var openDate = parseDateValue_(openDateVal);
-        var closeDate = parseDateValue_(closeDateVal);
         var now = new Date();
-
-        if (isNaN(openDate.getTime()) || isNaN(closeDate.getTime())) {
-            Logger.log('Invalid upload date in DM sheet. Open: ' + openDateVal + ', Close: ' + closeDateVal);
-            return { isAvailable: true };
-        }
-
         if (now >= openDate && now <= closeDate) {
             return { isAvailable: true };
         }
@@ -540,11 +533,15 @@ function getExistingCourses(npm) {
         // sem3: Q-W = index 16-22 (7 slot)
         // sem5: X-AD = index 23-29 (7 slot)
         // sem7: AE-AK = index 30-36 (7 slot)
+        // sem2/sem4/sem6 (genap): index 71-91
         var semConfig = [
             { startIdx: 9, slots: 7 },  // sem 1
             { startIdx: 16, slots: 7 },  // sem 3
             { startIdx: 23, slots: 7 },  // sem 5
-            { startIdx: 30, slots: 7 }   // sem 7
+            { startIdx: 30, slots: 7 },  // sem 7
+            { startIdx: 71, slots: 7 },  // sem 2 (genap)
+            { startIdx: 78, slots: 7 },  // sem 4 (genap)
+            { startIdx: 85, slots: 7 }   // sem 6 (genap)
         ];
 
         semConfig.forEach(function (cfg) {
@@ -583,10 +580,13 @@ function getMataKuliahFromSheet(semester) {
         var ss = SpreadsheetApp.openById(getSpreadsheetId());
         var sheet = ss.getSheetByName('MK') || ss.insertSheet('MK');
         var range;
-        if (semester == 1) range = sheet.getRange('D2:D' + sheet.getLastRow());       // Angkatan 2026
-        else if (semester == 3) range = sheet.getRange('E2:E' + sheet.getLastRow());   // Angkatan 2025
-        else if (semester == 5) range = sheet.getRange('F2:F' + sheet.getLastRow());   // Angkatan 2024
-        else if (semester == 7) range = sheet.getRange('G2:G' + sheet.getLastRow());   // Angkatan 2023/Lainnya
+        if (semester == 1) range = sheet.getRange('D2:D' + sheet.getLastRow());       // Angkatan 2026 (ganjil)
+        else if (semester == 3) range = sheet.getRange('E2:E' + sheet.getLastRow());   // Angkatan 2025 (ganjil)
+        else if (semester == 5) range = sheet.getRange('F2:F' + sheet.getLastRow());   // Angkatan 2024 (ganjil)
+        else if (semester == 7) range = sheet.getRange('G2:G' + sheet.getLastRow());   // Angkatan 2023/Lainnya (ganjil)
+        else if (semester == 2) range = sheet.getRange('H2:H' + sheet.getLastRow());   // Angkatan 2026 (genap)
+        else if (semester == 4) range = sheet.getRange('I2:I' + sheet.getLastRow());   // Angkatan 2025 (genap)
+        else if (semester == 6) range = sheet.getRange('J2:J' + sheet.getLastRow());   // Angkatan 2024 (genap)
         else return [];
 
         var data = range.getValues();
@@ -633,17 +633,14 @@ function uploadFileToDrive(fileContent, fileName, mimeType) {
 
 // ============================================================
 // VALIDASI BUKTI PEMBAYARAN DARI PORTAL
-// MK!G12: 'Default' → wajib file portal (NPM di PDF harus cocok);
-//         'Bypass'  → semua cek dilewati (cadangan saat portal bermasalah).
 // ============================================================
-
-var UPLOAD_MODE_RANGE = 'MK!G12';
 
 function getUploadMode_() {
     try {
-        var ss = SpreadsheetApp.openById(getSpreadsheetId());
-        var val = String(ss.getRange(UPLOAD_MODE_RANGE).getValue() || '').trim().toLowerCase();
-        return (val === 'bypass') ? 'bypass' : 'default';
+        ensureConfigSeeded_();
+        var mode = getConfig_(CONFIG_KEYS.uploadMode);
+        if (!mode) mode = 'default';
+        return (mode === 'bypass') ? 'bypass' : 'default';
     } catch (err) {
         Logger.log('getUploadMode_ error: ' + err.message);
         return 'default';
@@ -911,11 +908,17 @@ function mirrorPembayaranRowToInput_(ss, headers, rowData) {
     var matakuliahList = [];
 
     if (kirimSheet && kirimSheet.getLastRow() > 1) {
-        var kData = kirimSheet.getRange(2, 1, kirimSheet.getLastRow() - 1, Math.max(kirimSheet.getLastColumn(), 37)).getValues();
+        var kData = kirimSheet.getRange(2, 1, kirimSheet.getLastRow() - 1, Math.max(kirimSheet.getLastColumn(), 92)).getValues();
         for (var i = 0; i < kData.length; i++) {
             if (normalizeNpm_(kData[i][1]) === npm) {
-                // Kolom J-AK (indeks 9-36) berisi MK yang sudah di-ACC
+                // Kolom J-AK (indeks 9-36) + genap (indeks 71-91) berisi MK yang sudah di-ACC
                 for (var j = 9; j <= 36; j++) {
+                    var mk = String(kData[i][j] || '').trim();
+                    if (mk) {
+                        matakuliahList.push(mk);
+                    }
+                }
+                for (var j = 71; j <= 91; j++) {
                     var mk = String(kData[i][j] || '').trim();
                     if (mk) {
                         matakuliahList.push(mk);
@@ -1000,7 +1003,8 @@ function sendUploadPembayaranConfirmationEmail_(payload) {
     MailApp.sendEmail({
         to: payload.email,
         subject: 'Konfirmasi unggah bukti pembayaran',
-        htmlBody: emailBody
+        htmlBody: emailBody,
+        name: 'FKIK UMSU - Pendaftaran Remedial'
     });
 }
 
@@ -1043,7 +1047,7 @@ function _resolvePendaftaranIzinStatus_(npm) {
         Logger.log('Error checking Izin in _resolvePendaftaranIzinStatus_: ' + e.message);
     }
 
-    if (result.alreadyRegistered && (!result.inIzin || result.remainingQuota <= 0)) {
+    if (result.alreadyRegistered && (!result.inIzin || result.remainingQuota === 0)) {
         result.blocked = true;
         result.message = 'Anda sudah terdaftar, Pendaftaran hanya satu kali saja.';
     }
@@ -1136,11 +1140,11 @@ function submitFormData(formData) {
         }
 
         if (emailSent) {
-            return { status: 'success', message: 'Data berhasil disimpan dan email konfirmasi telah dikirim' };
+            return { status: 'success', message: 'Data berhasil disimpan dan email konfirmasi telah dikirim ke ' + (formData.email || 'email Anda') };
         } else {
             return {
                 status: 'partial_success',
-                message: 'Data berhasil disimpan, namun gagal mengirim email konfirmasi. Silakan hubungi admin atau cek email Anda nanti.',
+                message: 'Data berhasil disimpan, namun email konfirmasi GAGAL terkirim.',
                 details: emailError
             };
         }
@@ -1203,14 +1207,23 @@ function updateMataKuliah(npm, semester, newMataKuliah) {
         else if (semester == 3) { startCol = 17; numCols = 7; }
         else if (semester == 5) { startCol = 24; numCols = 7; }
         else if (semester == 7) { startCol = 31; numCols = 7; }
+        else if (semester == 2) { startCol = 72; numCols = 7; }   // Sem2 genap (1-based 72-78)
+        else if (semester == 4) { startCol = 79; numCols = 7; }   // Sem4 genap (1-based 79-85)
+        else if (semester == 6) { startCol = 86; numCols = 7; }   // Sem6 genap (1-based 86-92)
         else throw new Error('Semester tidak valid: ' + semester);
 
         // Update cell-cell yang masih kosong dengan MK baru
         var currentValues = row.slice(startCol - 1, startCol - 1 + numCols);
+        // Pastikan panjang array = numCols (sheet genap mungkin belum diperluas → slice pendek)
+        while (currentValues.length < numCols) currentValues.push('');
         var added = 0;
         for (var j = 0; j < numCols && added < newMataKuliah.length; j++) {
             var cell = String(currentValues[j] || '').trim();
             if (cell === '') { currentValues[j] = newMataKuliah[added]; added++; }
+        }
+        // Pastikan sheet cukup lebar untuk kolom genap sebelum menulis
+        if (startCol > lastCol) {
+            ensurePendaftaranGenapHeaders_(sheet);
         }
         sheet.getRange(rowIndex, startCol, 1, numCols).setValues([currentValues]);
         SpreadsheetApp.flush();
@@ -1262,9 +1275,11 @@ function incrementIzinUsed(npm) {
         if (rowIdx === -1) throw new Error('NPM tidak ditemukan di Izin');
         var quotaCell = izinSheet.getRange(rowIdx, IZIN_QUOTA_COLUMN);
         var remaining = parseIzinQuota_(quotaCell.getValue());
-        if (remaining <= 0) throw new Error('Anda sudah terdaftar, Pendaftaran hanya satu kali saja.');
-        remaining -= 1;
-        quotaCell.setValue(remaining);
+        if (remaining === 0) throw new Error('Anda sudah terdaftar, Pendaftaran hanya satu kali saja.');
+        if (remaining > 0) {
+            remaining -= 1;
+            quotaCell.setValue(remaining);
+        }
         try {
             syncToSupabase_('izin', { npm: npm, quota_af: remaining }, 'npm');
         } catch (syncErr) {
@@ -1359,13 +1374,20 @@ function saveToSpreadsheet(formData) {
             var ss = SpreadsheetApp.openById(spreadsheetId);
             var sheet = ss.getSheetByName('Pendaftaran') || ss.insertSheet('Pendaftaran');
             if (sheet.getLastRow() === 0) {
+                // Header ganjil (kolom 1-37) + genap (kolom 72-92, idx 71-91)
                 var headerRow = ['Timestamp', 'NPM', 'Nama Lengkap', 'Email', 'No. HP/WA', 'Angkatan', 'Semester', 'Pasfoto URL', 'KRS URL'];
                 for (var h1 = 1; h1 <= 7; h1++) headerRow.push('MK Sem1 ' + h1);
                 for (var h3 = 1; h3 <= 7; h3++) headerRow.push('MK Sem3 ' + h3);
                 for (var h5 = 1; h5 <= 7; h5++) headerRow.push('MK Sem5 ' + h5);
                 for (var h7 = 1; h7 <= 7; h7++) headerRow.push('MK Sem7 ' + h7);
+                while (headerRow.length < 71) headerRow.push(''); // ruang SKS/Total/Status (idx 37-70)
+                for (var h2 = 1; h2 <= 7; h2++) headerRow.push('MK Sem2 ' + h2);
+                for (var h4 = 1; h4 <= 7; h4++) headerRow.push('MK Sem4 ' + h4);
+                for (var h6 = 1; h6 <= 7; h6++) headerRow.push('MK Sem6 ' + h6);
                 // Tulis header via setValues (lebih cepat dari appendRow untuk 1 baris pertama)
                 sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
+            } else {
+                ensurePendaftaranGenapHeaders_(sheet);
             }
             // Bangun rowData lengkap sekali sebelum menulis (1 appendRow saja)
             var rowData = [new Date()].concat(baseRowData);
@@ -1373,6 +1395,10 @@ function saveToSpreadsheet(formData) {
             for (var i3 = 1; i3 <= 7; i3++) rowData.push(formData['mkSem3' + i3] || '');
             for (var i5 = 1; i5 <= 7; i5++) rowData.push(formData['mkSem5' + i5] || '');
             for (var i7 = 1; i7 <= 7; i7++) rowData.push(formData['mkSem7' + i7] || '');
+            while (rowData.length < 71) rowData.push(''); // sejajar dengan posisi blok genap (idx 71+)
+            for (var i2 = 1; i2 <= 7; i2++) rowData.push(formData['mkSem2' + i2] || '');
+            for (var i4 = 1; i4 <= 7; i4++) rowData.push(formData['mkSem4' + i4] || '');
+            for (var i6 = 1; i6 <= 7; i6++) rowData.push(formData['mkSem6' + i6] || '');
             sheet.appendRow(rowData);  // ← hanya 1x API write
             ensureTextFormatForHeader(sheet, 'No. HP/WA');
             try {
@@ -1393,12 +1419,33 @@ function saveToSpreadsheet(formData) {
 }
 
 /**
+ * Pastikan sheet Pendaftaran/Kirim punya header blok genap (MK Sem2/Sem4/Sem6)
+ * di kolom 72-92 (1-based). Idempoten — dilewati jika 'MK Sem2 1' sudah ada.
+ */
+function ensurePendaftaranGenapHeaders_(sheet) {
+    if (!sheet) return;
+    try {
+        var lastCol = sheet.getLastColumn();
+        var headers = sheet.getRange(1, 1, 1, Math.max(lastCol, 1)).getValues()[0].map(function (h) { return String(h).trim().toLowerCase(); });
+        if (headers.indexOf('mk sem2 1') !== -1) return;
+        var labels = [];
+        for (var h2 = 1; h2 <= 7; h2++) labels.push('MK Sem2 ' + h2);
+        for (var h4 = 1; h4 <= 7; h4++) labels.push('MK Sem4 ' + h4);
+        for (var h6 = 1; h6 <= 7; h6++) labels.push('MK Sem6 ' + h6);
+        sheet.getRange(1, 72, 1, 21).setValues([labels]);
+    } catch (e) {
+        Logger.log('ensurePendaftaranGenapHeaders_ error: ' + e.message);
+    }
+}
+
+/**
  * Update data mahasiswa yang sudah terdaftar (untuk revisi)
  */
 function updateStudentInPendaftaran(formData) {
     try {
         var ss = SpreadsheetApp.openById(getSpreadsheetId());
         var sheet = ss.getSheetByName('Pendaftaran');
+        ensurePendaftaranGenapHeaders_(sheet);
         var npm = formData.custID || formData.npm;
         var npmClean = normalizeNpm_(npm);
 
@@ -1433,7 +1480,10 @@ function updateStudentInPendaftaran(formData) {
             { sem: 1, startIdx: 9, maxCols: 7 }, // J-P (index 9-15)
             { sem: 3, startIdx: 16, maxCols: 7 }, // Q-W (index 16-22)
             { sem: 5, startIdx: 23, maxCols: 7 }, // X-AD (index 23-29)
-            { sem: 7, startIdx: 30, maxCols: 7 }  // AE-AK (index 30-36)
+            { sem: 7, startIdx: 30, maxCols: 7 },  // AE-AK (index 30-36)
+            { sem: 2, startIdx: 71, maxCols: 7 },  // Sem2 genap (index 71-77)
+            { sem: 4, startIdx: 78, maxCols: 7 },  // Sem4 genap (index 78-84)
+            { sem: 6, startIdx: 85, maxCols: 7 }   // Sem6 genap (index 85-91)
         ];
 
         semConfig.forEach(function (cfg) {
@@ -1484,12 +1534,7 @@ function updateStudentInPendaftaran(formData) {
  */
 function extractCoursesFromRow_(row) {
     var courses = [];
-    var semConfig = [
-        { startIdx: 9, slots: 7 }, // Sem 1
-        { startIdx: 16, slots: 7 }, // Sem 3
-        { startIdx: 23, slots: 7 }, // Sem 5
-        { startIdx: 30, slots: 7 }  // Sem 7
-    ];
+    var semConfig = MK_COL_MAP.concat(MK_GENAP_PEND_COL_MAP);
     semConfig.forEach(function (cfg) {
         for (var k = 0; k < cfg.slots; k++) {
             var val = String(row[cfg.startIdx + k] || '').trim();
@@ -1515,7 +1560,7 @@ function getMataKuliahList(formData) {
         });
     } else {
         // Jika belum ada (Pendaftaran Baru), baca per semester
-        [1, 3, 5, 7].forEach(function (semester) {
+        [1, 2, 3, 4, 5, 6, 7].forEach(function (semester) {
             var hasAny = false;
             var maxOptions = 7;
             for (var i = 1; i <= maxOptions; i++) {
@@ -1534,13 +1579,18 @@ function getMataKuliahList(formData) {
 /**
  * Kirim email konfirmasi pendaftaran ke mahasiswa
  */
+function getPeriodeLabel_() {
+    var periode = getConfig_(CONFIG_KEYS.periode) || 'ganjil';
+    return periode === 'genap' ? 'Genap' : 'Ganjil';
+}
+
 function sendConfirmationEmail(formData) {
     try {
         var mataKuliahList = getMataKuliahList(formData);
         var emailBody = '' +
             '<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">' +
             '<h2 style="text-align: center;">Konfirmasi Pendaftaran Remedial</h2>' +
-            '<p style="text-align: center;">Semester Ganjil 2026-2027 - Fakultas Kedokteran dan Ilmu Kesehatan UMSU</p>' +
+            '<p style="text-align: center;">Semester ' + getPeriodeLabel_() + ' 2026-2027 - Fakultas Kedokteran dan Ilmu Kesehatan UMSU</p>' +
             '<hr style="border: 1px solid #eee;" />' +
             '<p>Assalamu\'alaikum, ' + (formData.namalengkap || '') + ',</p>' +
             '<p>Terima kasih telah mendaftar remedial. Berikut adalah detail pendaftaran Anda</p>' +
@@ -1562,13 +1612,14 @@ function sendConfirmationEmail(formData) {
             '</div>';
         MailApp.sendEmail({
             to: formData.email,
-            subject: 'Konfirmasi Pendaftaran Remedial Semester Ganjil - Fakultas Kedokteran dan Ilmu Kesehatan UMSU',
-            htmlBody: emailBody
+            subject: 'Konfirmasi Pendaftaran Remedial Semester ' + getPeriodeLabel_() + ' - Fakultas Kedokteran dan Ilmu Kesehatan UMSU',
+            htmlBody: emailBody,
+            name: 'FKIK UMSU - Pendaftaran Remedial'
         });
         return true;
     } catch (error) {
-        Logger.log('Error sending email: ' + error.message);
-        throw new Error('Gagal mengirim email konfirmasi: ' + error.message);
+        Logger.log('Error sending email to ' + (formData.email || '(kosong)') + ': ' + error.message);
+        throw new Error('Gagal mengirim email konfirmasi ke ' + (formData.email || '(email kosong)') + ': ' + error.message);
     }
 }
 
@@ -1583,7 +1634,7 @@ function parseIzinQuota_(val) {
         var str = String(val || '').trim();
         if (!str) return 0;
         var lone = parseInt(str, 10);
-        if (!isNaN(lone)) return Math.max(0, lone);
+        if (!isNaN(lone)) return lone;
     } catch (e) { }
     return 0;
 }
@@ -1678,6 +1729,9 @@ function ensureKirimHeaders_(ss) {
         kirimSheet.appendRow(headers);
         kirimSheet.getRange(1, 1, 1, headers.length).setBackground('#003087').setFontColor('#ffffff').setFontWeight('bold');
     }
+    // Header genap dipasang SETELAH blok copy header dari Pendaftaran,
+    // agar sheet Kirim baru tetap mendapat header kolom 1-71 (metadata+MK ganjil+SKS+TotalSKS+dst).
+    ensurePendaftaranGenapHeaders_(kirimSheet);
 }
 
 /**
@@ -1734,6 +1788,16 @@ var MK_COL_MAP = [
     { mkSheetCol: 5, semLabel: 'Sem3', startIdx: 16, slots: 7 },  // E → Q:W
     { mkSheetCol: 6, semLabel: 'Sem5', startIdx: 23, slots: 7 },  // F → X:AD
     { mkSheetCol: 7, semLabel: 'Sem7', startIdx: 30, slots: 7 }   // G → AE:AK
+];
+
+// Mapping MK sheet kolom genap (H/I/J → Sem2/Sem4/Sem6) ke kolom Pendaftaran/Kirim.
+// Blok MK genap diletakkan SETELAH kolom EMAIL_ACC (idx 70), sebelum blok SKS genap:
+//   Sem2 MK: idx 71-77, Sem4 MK: idx 78-84, Sem6 MK: idx 85-91
+//   SKS genap berurutan: idx 92-112 (sksStartIdx per semester)
+var MK_GENAP_PEND_COL_MAP = [
+    { mkSheetCol: 8, semLabel: 'Sem2', startIdx: 71, slots: 7, sksStartIdx: 92 },   // H → AL2 (idx 71-77)
+    { mkSheetCol: 9, semLabel: 'Sem4', startIdx: 78, slots: 7, sksStartIdx: 99 },   // I → idx 78-84
+    { mkSheetCol: 10, semLabel: 'Sem6', startIdx: 85, slots: 7, sksStartIdx: 106 }   // J → idx 85-91
 ];
 
 // Dropdown options yang tersedia per sheet admin
@@ -1990,10 +2054,11 @@ function syncPendaftaranAccHighlight_() {
         });
         pendSheet.setConditionalFormatRules(rules);
 
-        // Reset semua baris data (A..AK) ke warna putih
+        // Reset semua baris data (A..AK + blok genap) ke warna putih
         var pLast = Math.min(pendSheet.getLastRow(), maxRow);
         if (pLast < 2) return;
-        pendSheet.getRange(2, 1, pLast - 1, 37).setBackground('#FFFFFF');
+        var pendWidth = Math.max(pendSheet.getLastColumn(), 92);
+        pendSheet.getRange(2, 1, pLast - 1, Math.min(pendWidth, 92)).setBackground('#FFFFFF');
 
         if (!kirimSheet || kirimSheet.getLastRow() <= 1 || kirimSheet.getLastColumn() < KIRIM_STATUS_COL) return;
         var kLast = Math.min(kirimSheet.getLastRow(), maxRow);
@@ -2016,7 +2081,7 @@ function syncPendaftaranAccHighlight_() {
         }
         if (runStart !== -1) runs.push([runStart, pLast - 2]);
         for (var j = 0; j < runs.length; j++) {
-            pendSheet.getRange(runs[j][0] + 2, 1, runs[j][1] - runs[j][0] + 1, 37).setBackground('#D9EAD3');
+            pendSheet.getRange(runs[j][0] + 2, 1, runs[j][1] - runs[j][0] + 1, Math.min(pendWidth, 92)).setBackground('#D9EAD3');
         }
         SpreadsheetApp.flush();
     } catch (err) {
@@ -2067,8 +2132,9 @@ function paintPendaftaranRowByNpm_(ss, npm, accStatus) {
             if (!isMatch && runStart !== -1) { runs.push([runStart, r - 1]); runStart = -1; }
         }
         if (runStart !== -1) runs.push([runStart, pLast - 2]);
+        var pendWidth = Math.max(pendSheet.getLastColumn(), 92);
         for (var j = 0; j < runs.length; j++) {
-            pendSheet.getRange(runs[j][0] + 2, 1, runs[j][1] - runs[j][0] + 1, 37).setBackground(color);
+            pendSheet.getRange(runs[j][0] + 2, 1, runs[j][1] - runs[j][0] + 1, Math.min(pendWidth, 92)).setBackground(color);
         }
     } catch (err) {
         Logger.log('paintPendaftaranRowByNpm_ error: ' + err.message);
@@ -2162,10 +2228,10 @@ function getMkListForAdminSheet_(mkSheet, adminSheetName) {
  * Cari info kolom di Pendaftaran berdasarkan nama MK.
  * Hasil mapping di-cache 30 menit agar tidak re-read sheet MK setiap onEdit.
  */
-function getMkColumnInfo_(mkName) {
+function getMkColumnInfo_(mkName, semester) {
     try {
         var mkNameKey = normalizeMkName_(mkName);
-        var cacheKey = 'mkColInfoMap_v3';
+        var cacheKey = 'mkColInfoMap_v5';
         var cache = CacheService.getScriptCache();
 
         // Coba ambil dari cache dulu
@@ -2175,8 +2241,9 @@ function getMkColumnInfo_(mkName) {
             try { mkMap = JSON.parse(cached); } catch (e) { mkMap = {}; }
         }
 
-        // Jika ada di cache, langsung return
-        if (mkMap[mkNameKey]) return mkMap[mkNameKey];
+        // Jika ada di cache, langsung return (resolve per semester mahasiswa)
+        var cachedEntry = resolveMkEntry_(mkMap[mkNameKey], semester);
+        if (cachedEntry) return cachedEntry;
 
         // Tidak ada di cache → baca dari sheet (seminim mungkin API call)
         var ss = SpreadsheetApp.openById(getSpreadsheetId());
@@ -2184,8 +2251,8 @@ function getMkColumnInfo_(mkName) {
         var lastRow = mkSheet.getLastRow();
         if (lastRow < 2) return null;
 
-        // Baca kolom D, E, F, G sekaligus dalam 1 API call (bukan 4x getRange)
-        var allVals = mkSheet.getRange(2, 4, lastRow - 1, 4).getValues(); // cols D,E,F,G
+        // Baca kolom D..K (ganjil D-G, genap H-K) sekaligus dalam 1 API call
+        var allVals = mkSheet.getRange(2, 4, lastRow - 1, 8).getValues(); // cols D,E,F,G,H,I,J,K
 
         // Baca kolom A (Nama MK) dan B (SKS) untuk mencari nilai SKS
         var sksVals = mkSheet.getRange(2, 1, lastRow - 1, 2).getValues(); // cols A,B
@@ -2195,35 +2262,80 @@ function getMkColumnInfo_(mkName) {
             if (mk) sksMap[mk] = String(r[1] || '').trim();
         });
 
-        MK_COL_MAP.forEach(function (cfg, colOffset) {
-            for (var i = 0; i < allVals.length; i++) {
-                var v = String(allVals[i][colOffset] || '').trim();
-                if (!v) continue;
-
-                // Cari nilai SKS di kolom B (indeks 1) untuk nama MK ini
-                var sks = sksMap[v] || '';
-                var inValidSlot = i < cfg.slots;
-
-                mkMap[normalizeMkName_(v)] = {
-                    pendIdx: inValidSlot ? (cfg.startIdx + i) : null,
-                    pendCol: inValidSlot ? (cfg.startIdx + i + 1) : null,
-                    sksCol: inValidSlot ? (cfg.startIdx + i + 29) : null, // Kolom AL (38) berjarak 28 kolom dari J (10)
-                    sks: sks,
-                    semLabel: cfg.semLabel,
-                    slotPos: i + 1,
-                    inValidSlot: inValidSlot
-                };
-            }
+        // Entri per nama MK dipisah per periode (ganjil/genap) agar nama yang
+        // sama di kolom D-G dan H-K tidak saling menimpa.
+        MK_COL_MAP.forEach(function (cfg) {
+            putMkMapEntry_(mkMap, 'ganjil', cfg, allVals, sksMap);
+        });
+        MK_GENAP_PEND_COL_MAP.forEach(function (cfg) {
+            putMkMapEntry_(mkMap, 'genap', cfg, allVals, sksMap);
         });
 
         // Simpan ke cache selama 30 menit
         try { cache.put(cacheKey, JSON.stringify(mkMap), 1800); } catch (e) { }
 
-        return mkMap[mkNameKey] || null;
+        return resolveMkEntry_(mkMap[mkNameKey], semester);
     } catch (e) {
         Logger.log('getMkColumnInfo_ error: ' + e.message);
         return null;
     }
+}
+
+function putMkMapEntry_(mkMap, periodKey, cfg, allVals, sksMap) {
+    var colOffset = cfg.mkSheetCol - 4;
+    for (var i = 0; i < allVals.length; i++) {
+        var v = String(allVals[i][colOffset] || '').trim();
+        if (!v) continue;
+
+        var sks = sksMap[v] || '';
+        var inValidSlot = i < cfg.slots;
+        var sksCol = inValidSlot
+            ? (cfg.sksStartIdx ? (cfg.sksStartIdx + i + 1) : (cfg.startIdx + i + 29))
+            : null;
+
+        var key = normalizeMkName_(v);
+        if (!mkMap[key]) mkMap[key] = {};
+        mkMap[key][periodKey] = {
+            pendIdx: inValidSlot ? (cfg.startIdx + i) : null,
+            pendCol: inValidSlot ? (cfg.startIdx + i + 1) : null,
+            sksCol: sksCol,
+            sks: sks,
+            semLabel: cfg.semLabel,
+            slotPos: i + 1,
+            inValidSlot: inValidSlot
+        };
+    }
+}
+
+/**
+ * Pilih entri kolom berdasarkan semester mahasiswa yang terdaftar.
+ * Semester genap (2/4/6) → prefer entri genap; selain itu prefer ganjil.
+ * Fallback ke periode lain bila MK hanya ada di satu periode.
+ */
+function resolveMkEntry_(entry, semester) {
+    if (!entry) return null;
+    var sem = parseInt(String(semester || '').trim(), 10);
+    var isGenapSem = (sem === 2 || sem === 4 || sem === 6);
+    if (isGenapSem) return entry.genap || entry.ganjil || null;
+    return entry.ganjil || entry.genap || null;
+}
+
+/**
+ * Tentukan nomor semester seorang mahasiswa berdasarkan angkatan + periode aktif.
+ */
+function getSemesterForAngkatan_(angkatan) {
+    var periode = getConfig_(CONFIG_KEYS.periode) || 'ganjil';
+    if (periode === 'genap') {
+        if (angkatan === '2026') return '2';
+        if (angkatan === '2025') return '4';
+        if (angkatan === '2024') return '6';
+        return '';
+    }
+    if (angkatan === '2026') return '1';
+    if (angkatan === '2025') return '3';
+    if (angkatan === '2024') return '5';
+    if (angkatan === '2023' || angkatan === 'Lainnya') return '7';
+    return '';
 }
 
 /**
@@ -2234,7 +2346,9 @@ function clearMkColumnInfoCache() {
         var cache = CacheService.getScriptCache();
         cache.remove('mkColInfoMap_v1');
         cache.remove('mkColInfoMap_v3');
-        cache.removeAll(['mkList_sem1_v1', 'mkList_sem3_v1', 'mkList_sem5_v1', 'mkList_sem7_v1']);
+        cache.remove('mkColInfoMap_v4');
+        cache.remove('mkColInfoMap_v5');
+        cache.removeAll(['mkList_sem1_v1', 'mkList_sem2_v1', 'mkList_sem3_v1', 'mkList_sem4_v1', 'mkList_sem5_v1', 'mkList_sem6_v1', 'mkList_sem7_v1', 'mkList_sem8_v1']);
         Logger.log('MK column info and lists cache cleared.');
     } catch (e) { Logger.log('clearMkColumnInfoCache error: ' + e.message); }
 }
@@ -2356,13 +2470,17 @@ function testMkSheet() {
     var lastRow = mkSheet.getLastRow();
     if (lastRow < 2) { Logger.log('STOP: Sheet MK kosong'); return; }
 
-    var mkVals = mkSheet.getRange(2, 4, lastRow - 1, 4).getValues();
-    var mkFromSheet = { D: [], E: [], F: [], G: [] };
+    var mkVals = mkSheet.getRange(2, 4, lastRow - 1, 8).getValues();
+    var mkFromSheet = { D: [], E: [], F: [], G: [], H: [], I: [], J: [], K: [] };
     mkVals.forEach(function (row) {
         var d = String(row[0] || '').trim(); if (d) mkFromSheet.D.push(d);
         var e = String(row[1] || '').trim(); if (e) mkFromSheet.E.push(e);
         var f = String(row[2] || '').trim(); if (f) mkFromSheet.F.push(f);
         var g = String(row[3] || '').trim(); if (g) mkFromSheet.G.push(g);
+        var h = String(row[4] || '').trim(); if (h) mkFromSheet.H.push(h);
+        var i = String(row[5] || '').trim(); if (i) mkFromSheet.I.push(i);
+        var j = String(row[6] || '').trim(); if (j) mkFromSheet.J.push(j);
+        var k = String(row[7] || '').trim(); if (k) mkFromSheet.K.push(k);
     });
 
     Logger.log('=== MK di Sheet MK ===');
@@ -2370,6 +2488,10 @@ function testMkSheet() {
     Logger.log('Kolom E/Sem3/2025 (' + mkFromSheet.E.length + ' MK): ' + JSON.stringify(mkFromSheet.E));
     Logger.log('Kolom F/Sem5/2024 (' + mkFromSheet.F.length + ' MK): ' + JSON.stringify(mkFromSheet.F));
     Logger.log('Kolom G/Sem7/2023 (' + mkFromSheet.G.length + ' MK): ' + JSON.stringify(mkFromSheet.G));
+    Logger.log('Kolom H/Sem2/2026 (genap, ' + mkFromSheet.H.length + ' MK): ' + JSON.stringify(mkFromSheet.H));
+    Logger.log('Kolom I/Sem4/2025 (genap, ' + mkFromSheet.I.length + ' MK): ' + JSON.stringify(mkFromSheet.I));
+    Logger.log('Kolom J/Sem6/2024 (genap, ' + mkFromSheet.J.length + ' MK): ' + JSON.stringify(mkFromSheet.J));
+    Logger.log('Kolom K/Sem8 (genap, ' + mkFromSheet.K.length + ' MK): ' + JSON.stringify(mkFromSheet.K));
 
     var pendSheet = ss.getSheetByName('Pendaftaran');
     if (!pendSheet || pendSheet.getLastRow() <= 1) { Logger.log('Pendaftaran kosong'); return; }
@@ -2380,9 +2502,13 @@ function testMkSheet() {
             var v = String(row[i] || '').trim();
             if (v) mkFromPend[v] = (mkFromPend[v] || 0) + 1;
         }
+        for (var i = 71; i <= 91; i++) {
+            var v = String(row[i] || '').trim();
+            if (v) mkFromPend[v] = (mkFromPend[v] || 0) + 1;
+        }
     });
 
-    var allMkSheet = mkFromSheet.D.concat(mkFromSheet.E, mkFromSheet.F, mkFromSheet.G);
+    var allMkSheet = mkFromSheet.D.concat(mkFromSheet.E, mkFromSheet.F, mkFromSheet.G, mkFromSheet.H, mkFromSheet.I, mkFromSheet.J, mkFromSheet.K);
     var mkSheetSet = {};
     allMkSheet.forEach(function (m) { mkSheetSet[m] = true; });
 
@@ -2496,7 +2622,7 @@ function handleStatusChangeRealtime_(sheet, row, newStatus, startCol) {
         var alasan = String(rowData[5] || '').trim();
         if (!npm) { resetDecisionCell_(sheet, row, startCol); return; }
 
-        var mkInfo = getMkColumnInfo_(mkName);
+        var mkInfo = getMkColumnInfo_(mkName, getSemesterForAngkatan_(String(rowData[2] || '').trim()));
         if (!mkInfo || !mkInfo.pendCol || !mkInfo.sksCol) { resetDecisionCell_(sheet, row, startCol); return; }
 
         var ss = SpreadsheetApp.openById(getSpreadsheetId());
@@ -2549,6 +2675,9 @@ function upsertKirimRow_(ss, npm, nama, angkatan, mkName, mkInfo) {
                 kirimSheet.getRange(1, 1, 1, headers.length).setBackground('#003087').setFontColor('#ffffff').setFontWeight('bold');
             }
         }
+        // Header genap dipasang SETELAH blok copy header dari Pendaftaran,
+        // agar sheet Kirim baru tetap mendapat header kolom 1-71.
+        ensurePendaftaranGenapHeaders_(kirimSheet);
 
         // Cari baris NPM yang ada di Pendaftaran untuk data dasar
         var pendSheet = ss.getSheetByName('Pendaftaran');
@@ -2576,13 +2705,18 @@ function upsertKirimRow_(ss, npm, nama, angkatan, mkName, mkInfo) {
         if (kirimRowIdx === -1) {
             // Buat baris baru: copy data dasar dari Pendaftaran, MK kolom kosong semua
             var newRow = pendRow.slice(0, pendLastCol);
-            // Kosongkan semua kolom MK (J-AK = idx 9-36)
+            // Kosongkan semua kolom MK ganjil (J-AK = idx 9-36)
             for (var c = 9; c <= 36; c++) {
                 if (c < newRow.length) newRow[c] = '';
                 else newRow.push('');
             }
             // Kosongkan kolom AL-BM (idx 37-64) agar tidak menimpa rumus atau nilai SKS lama
             for (var c = 37; c <= 64; c++) {
+                if (c < newRow.length) newRow[c] = '';
+                else newRow.push('');
+            }
+            // Kosongkan kolom MK genap (idx 71-91) dan SKS genap (idx 92-112)
+            for (var c = 71; c <= 112; c++) {
                 if (c < newRow.length) newRow[c] = '';
                 else newRow.push('');
             }
@@ -2614,13 +2748,22 @@ function upsertKirimRow_(ss, npm, nama, angkatan, mkName, mkInfo) {
             kirimSheet.getRange(kirimRowIdx, mkInfo.sksCol).setValue(mkInfo.sks);
         }
 
-        // Hitung ulang Total SKS di kolom BN (kolom 66)
+        // Hitung ulang Total SKS di kolom BN (kolom 66): ganjil AL-BM (38-65) + genap SKS (93-113)
         var sksValues = kirimSheet.getRange(kirimRowIdx, 38, 1, 28).getValues()[0]; // AL(38) sampai BM(65)
         var totalSks = 0;
         for (var s = 0; s < sksValues.length; s++) {
             var val = parseFloat(sksValues[s]);
             if (!isNaN(val)) {
                 totalSks += val;
+            }
+        }
+        if (kirimSheet.getLastColumn() >= 113) {
+            var sksGenap = kirimSheet.getRange(kirimRowIdx, 93, 1, 21).getValues()[0]; // 93 sampai 113
+            for (var g = 0; g < sksGenap.length; g++) {
+                var gv = parseFloat(sksGenap[g]);
+                if (!isNaN(gv)) {
+                    totalSks += gv;
+                }
             }
         }
         kirimSheet.getRange(kirimRowIdx, 66).setValue(totalSks > 0 ? totalSks : '');
@@ -2658,10 +2801,13 @@ function removeFromKirim_(ss, npm, mkInfo) {
             kirimSheet.getRange(rowIdx + 2, mkInfo.sksCol).setValue('');
         }
 
-        // Cek apakah semua kolom MK (J-AK = col 10-37) kosong
+        // Cek apakah semua kolom MK (J-AK = col 10-37) + genap (col 72-92) kosong
         var rowVals = kirimSheet.getRange(rowIdx + 2, 1, 1, lastCol).getValues()[0];
         var hasAnyMk = false;
         for (var c = 9; c <= 36 && c < rowVals.length; c++) {
+            if (String(rowVals[c] || '').trim() !== '') { hasAnyMk = true; break; }
+        }
+        for (var c = 71; c <= 91 && c < rowVals.length && !hasAnyMk; c++) {
             if (String(rowVals[c] || '').trim() !== '') { hasAnyMk = true; break; }
         }
 
@@ -2669,13 +2815,22 @@ function removeFromKirim_(ss, npm, mkInfo) {
             kirimSheet.deleteRow(rowIdx + 2);
             Logger.log('removeFromKirim_: Baris NPM ' + npm + ' dihapus (semua MK kosong)');
         } else {
-            // Hitung ulang Total SKS di kolom BN (kolom 66)
+            // Hitung ulang Total SKS di kolom BN (kolom 66): ganjil AL-BM + genap SKS
             var sksValues = kirimSheet.getRange(rowIdx + 2, 38, 1, 28).getValues()[0]; // AL(38) sampai BM(65)
             var totalSks = 0;
             for (var s = 0; s < sksValues.length; s++) {
                 var val = parseFloat(sksValues[s]);
                 if (!isNaN(val)) {
                     totalSks += val;
+                }
+            }
+            if (lastCol >= 113) {
+                var sksGenap = kirimSheet.getRange(rowIdx + 2, 93, 1, 21).getValues()[0]; // 93 sampai 113
+                for (var g = 0; g < sksGenap.length; g++) {
+                    var gv = parseFloat(sksGenap[g]);
+                    if (!isNaN(gv)) {
+                        totalSks += gv;
+                    }
                 }
             }
             kirimSheet.getRange(rowIdx + 2, 66).setValue(totalSks > 0 ? totalSks : '');
@@ -3062,7 +3217,7 @@ function checkAndSetACC_(ss, npm) {
         if (!pendSheet || pendSheet.getLastRow() <= 1) return;
 
         var pLastRow = pendSheet.getLastRow();
-        var pLastCol = Math.max(pendSheet.getLastColumn(), 37); // minimal sampai kolom AK (idx 36)
+        var pLastCol = Math.max(pendSheet.getLastColumn(), 92); // minimal sampai kolom genap (idx 91)
         var pData = pendSheet.getRange(2, 1, pLastRow - 1, pLastCol).getValues();
 
         var pendRow = null;
@@ -3071,9 +3226,13 @@ function checkAndSetACC_(ss, npm) {
         }
         if (!pendRow) return;
 
-        // Kumpulkan semua MK yang dipilih mahasiswa (slot idx 9-36)
+        // Kumpulkan semua MK yang dipilih mahasiswa (slot ganjil idx 9-36 + genap idx 71-91)
         var pickedMKs = {}; // { mkName: true }
         for (var si = 9; si <= 36; si++) {
+            var v = String(pendRow[si] || '').trim();
+            if (v) pickedMKs[v] = true;
+        }
+        for (var si = 71; si <= 91; si++) {
             var v = String(pendRow[si] || '').trim();
             if (v) pickedMKs[v] = true;
         }
@@ -3086,12 +3245,16 @@ function checkAndSetACC_(ss, npm) {
 
         if (kirimSheet && kirimSheet.getLastRow() > 1) {
             var kLastRow = kirimSheet.getLastRow();
-            var kLastCol = Math.max(kirimSheet.getLastColumn(), 37);
+            var kLastCol = Math.max(kirimSheet.getLastColumn(), 92);
             var kData = kirimSheet.getRange(2, 1, kLastRow - 1, kLastCol).getValues();
             for (var ki = 0; ki < kData.length; ki++) {
                 if (normalizeNpm_(kData[ki][1]) === npmClean) {
                     kirimRowIdx = ki + 2; // 1-based row number in sheet
                     for (var ksi = 9; ksi <= 36; ksi++) {
+                        var kv = String(kData[ki][ksi] || '').trim();
+                        if (kv) approvedMKs[kv] = true;
+                    }
+                    for (var ksi = 71; ksi <= 91; ksi++) {
                         var kv = String(kData[ki][ksi] || '').trim();
                         if (kv) approvedMKs[kv] = true;
                     }
@@ -3156,6 +3319,11 @@ function checkAndSetACC_(ss, npm) {
             accCell.setValue('ACC').setBackground('#D9EAD3').setFontWeight('bold');
             Logger.log('checkAndSetACC_: NPM ' + npm + ' → ACC ✓');
             syncWaQueueForKirimRowByIndex_(ss, kirimRowIdx);
+            try {
+                sendAccEmailWithPdf_(ss, npmClean);
+            } catch (err) {
+                Logger.log('checkAndSetACC_ email error: ' + err.message);
+            }
         } else {
             // Jika ada keputusan dibatalkan kembali ke "--", reset ACC
             accCell.setValue('').setBackground(null).setFontWeight('normal');
@@ -3166,6 +3334,1400 @@ function checkAndSetACC_(ss, npm) {
         paintPendaftaranRowByNpm_(ss, npmClean, allDecided ? 'ACC' : '');
     } catch (err) {
         Logger.log('checkAndSetACC_ error: ' + err.message);
+    }
+}
+
+// ============================================================
+// DASHBOARD ADMIN: AUTHENTICATION
+// ============================================================
+
+var ADMIN_DASHBOARD_PASSWORD_KEY = 'ADMIN_DASHBOARD_PASSWORD';
+var ADMIN_DASHBOARD_DEFAULT_PASSWORD = 'satuduatiga';
+var DASH_SESSION_PREFIX = 'dashboard_session_';
+var DASH_SESSION_TTL = 30 * 60;
+
+function getAdminDashboardPassword_() {
+    var pwd = getScriptProperty_(ADMIN_DASHBOARD_PASSWORD_KEY);
+    return pwd || ADMIN_DASHBOARD_DEFAULT_PASSWORD;
+}
+
+function verifyAdminLogin(password) {
+    try {
+        if (!password) return { status: 'error', message: 'Password wajib diisi' };
+        var expected = getAdminDashboardPassword_();
+        if (String(password) !== expected) return { status: 'error', message: 'Password salah' };
+        var token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+        CacheService.getScriptCache().put(DASH_SESSION_PREFIX + token, 'valid', DASH_SESSION_TTL);
+        return { status: 'success', token: token, expiresIn: DASH_SESSION_TTL };
+    } catch (e) {
+        Logger.log('verifyAdminLogin error: ' + e.message);
+        return { status: 'error', message: e.message };
+    }
+}
+
+function requireAdmin_(token) {
+    var t = String(token || '').trim();
+    if (!t) throw new Error('Sesi tidak valid. Silakan login ulang.');
+    var cached = CacheService.getScriptCache().get(DASH_SESSION_PREFIX + t);
+    if (cached !== 'valid') throw new Error('Sesi berakhir. Silakan login ulang.');
+    return true;
+}
+
+function logoutAdmin(token) {
+    try {
+        var t = String(token || '').trim();
+        if (t) CacheService.getScriptCache().remove(DASH_SESSION_PREFIX + t);
+        return { status: 'success' };
+    } catch (e) {
+        return { status: 'error', message: e.message };
+    }
+}
+
+function menuSetDashboardPassword() {
+    if (!SpreadsheetApp.getUi) return 'Jalankan dari editor GAS';
+    var ui = SpreadsheetApp.getUi();
+    var resp = ui.prompt('Set Password Dashboard Admin', 'Masukkan password baru (min 8 karakter):', ui.ButtonSet.OK_CANCEL);
+    if (resp.getSelectedButton() !== ui.Button.OK) return 'Dibatalkan';
+    var pwd = String(resp.getResponseText() || '').trim();
+    if (pwd.length < 8) return 'Password minimal 8 karakter';
+    PropertiesService.getScriptProperties().setProperty(ADMIN_DASHBOARD_PASSWORD_KEY, pwd);
+    return 'Password dashboard berhasil diubah';
+}
+
+// ============================================================
+// DASHBOARD ADMIN: IZIN DAFTAR ULANG
+// ============================================================
+
+function ensureIzinSheet_(ss) {
+    var sheet = ss.getSheetByName('Izin') || ss.insertSheet('Izin');
+    if (sheet.getLastRow() === 0) {
+        sheet.appendRow(['Timestamp', 'NPM', 'Nama Lengkap', 'Angkatan']);
+        sheet.getRange(1, 1, 1, 4).setBackground('#003087').setFontColor('#ffffff').setFontWeight('bold');
+    }
+    ensureIzinQuotaColumn_(sheet);
+    return sheet;
+}
+
+function setIzinQuota_(ss, npm, nama, quota) {
+    var sheet = ensureIzinSheet_(ss);
+    var rowIdx = findRowIndexByNpm_(sheet, npm);
+    if (rowIdx === -1) {
+        sheet.appendRow([new Date(), npm, nama || '', '']);
+        rowIdx = sheet.getLastRow();
+    } else if (nama) {
+        var hdrs = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(function (h) { return String(h).trim().toLowerCase(); });
+        var idxNama = hdrs.indexOf('nama lengkap');
+        if (idxNama < 0) idxNama = 2;
+        sheet.getRange(rowIdx, idxNama + 1).setValue(nama);
+    }
+    sheet.getRange(rowIdx, IZIN_QUOTA_COLUMN).setValue(quota);
+}
+
+function grantRegistrasiIzin(token, npm, nama) {
+    requireAdmin_(token);
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var lock = LockService.getScriptLock();
+    try {
+        lock.waitLock(30000);
+        var npmClean = normalizeNpm_(npm);
+        if (!npmClean) throw new Error('NPM tidak valid');
+        setIzinQuota_(ss, npmClean, String(nama || '').trim(), -1);
+        return { status: 'success', message: 'Izin daftar ulang diberikan untuk ' + npmClean };
+    } finally {
+        try { lock.releaseLock(); } catch (e) { }
+    }
+}
+
+function revokeRegistrasiIzin(token, npm) {
+    requireAdmin_(token);
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var lock = LockService.getScriptLock();
+    try {
+        lock.waitLock(30000);
+        var npmClean = normalizeNpm_(npm);
+        if (!npmClean) throw new Error('NPM tidak valid');
+        var sheet = ss.getSheetByName('Izin');
+        if (sheet) {
+            var rowIdx = findRowIndexByNpm_(sheet, npmClean);
+            if (rowIdx !== -1) sheet.getRange(rowIdx, IZIN_QUOTA_COLUMN).setValue(0);
+        }
+        return { status: 'success', message: 'Izin daftar ulang dicabut untuk ' + npmClean };
+    } finally {
+        try { lock.releaseLock(); } catch (e) { }
+    }
+}
+
+function getIzinList(token) {
+    requireAdmin_(token);
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var sheet = ss.getSheetByName('Izin');
+    var list = [];
+    if (!sheet || sheet.getLastRow() <= 1) return list;
+    var lastRow = sheet.getLastRow();
+    var lastCol = Math.max(sheet.getLastColumn(), IZIN_QUOTA_COLUMN);
+    var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim().toLowerCase(); });
+    var idxNpm = headers.indexOf('npm'); if (idxNpm < 0) idxNpm = 1;
+    var idxNama = headers.indexOf('nama lengkap'); if (idxNama < 0) idxNama = 2;
+    var data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    for (var i = 0; i < data.length; i++) {
+        var npmClean = normalizeNpm_(data[i][idxNpm]);
+        if (!npmClean) continue;
+        var quota = parseIzinQuota_(data[i][IZIN_QUOTA_COLUMN - 1]);
+        var status = quota === -1 ? 'Aktif tanpa batas' : (quota === 0 ? 'Dicabut' : 'Kuota ' + quota);
+        list.push({ npm: npmClean, nama: String(data[i][idxNama] || '').trim(), quota: quota, status: status });
+    }
+    return list;
+}
+
+// ============================================================
+// DASHBOARD ADMIN: DATA REKAP
+// ============================================================
+
+function readPendaftaranStudents_(ss) {
+    var sheet = ss.getSheetByName('Pendaftaran');
+    var students = [];
+    if (!sheet || sheet.getLastRow() <= 1) return students;
+    var lastCol = Math.max(sheet.getLastColumn(), 92);
+    var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim().toLowerCase(); });
+    var idxNpm = headers.indexOf('npm'); if (idxNpm < 0) idxNpm = 1;
+    var idxNama = headers.indexOf('nama lengkap'); if (idxNama < 0) idxNama = 2;
+    var idxEmail = headers.indexOf('email'); if (idxEmail < 0) idxEmail = 3;
+    var idxHp = headers.indexOf('no. hp/wa'); if (idxHp < 0) idxHp = 4;
+    var idxAngkatan = headers.indexOf('angkatan'); if (idxAngkatan < 0) idxAngkatan = 5;
+    var idxSemester = headers.indexOf('semester'); if (idxSemester < 0) idxSemester = 6;
+    var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, lastCol).getValues();
+    for (var i = 0; i < data.length; i++) {
+        var row = data[i];
+        var npmClean = normalizeNpm_(row[idxNpm]);
+        if (!npmClean) continue;
+        var mks = [];
+        var semesters = [];
+        MK_COL_MAP.concat(MK_GENAP_PEND_COL_MAP).forEach(function (cfg) {
+            for (var j = 0; j < cfg.slots; j++) {
+                var idx = cfg.startIdx + j;
+                var mk = String(row[idx] || '').trim();
+                if (mk) {
+                    mks.push({ name: mk, semester: cfg.semLabel, status: 'Belum', alasan: '' });
+                    if (semesters.indexOf(cfg.semLabel) === -1) semesters.push(cfg.semLabel);
+                }
+            }
+        });
+        students.push({
+            npm: npmClean,
+            nama: String(row[idxNama] || '').trim(),
+            email: String(row[idxEmail] || '').trim(),
+            hp: String(row[idxHp] || '').trim(),
+            angkatan: String(row[idxAngkatan] || '').trim(),
+            semester: String(row[idxSemester] || '').trim(),
+            krsUrl: String(row[8] || '').trim(),
+            pasfotoUrl: String(row[7] || '').trim(),
+            mks: mks,
+            semesters: semesters
+        });
+    }
+    return students;
+}
+
+function readApprovedAndRejected_(ss, students) {
+    var approved = {};
+    var rejected = {};
+    students.forEach(function (s) { approved[s.npm] = {}; rejected[s.npm] = {}; });
+
+    var kirim = ss.getSheetByName(KIRIM_SHEET_NAME);
+    if (kirim && kirim.getLastRow() > 1) {
+        var kCols = Math.max(kirim.getLastColumn(), 92);
+        var kData = kirim.getRange(2, 1, kirim.getLastRow() - 1, kCols).getValues();
+        for (var i = 0; i < kData.length; i++) {
+            var npmK = normalizeNpm_(kData[i][1]);
+            if (!npmK || !approved[npmK]) continue;
+            for (var j = 9; j <= 36; j++) {
+                var mk = String(kData[i][j] || '').trim();
+                if (mk) approved[npmK][normalizeMkName_(mk)] = mk;
+            }
+            for (var j = 71; j <= 91; j++) {
+                var mk = String(kData[i][j] || '').trim();
+                if (mk) approved[npmK][normalizeMkName_(mk)] = mk;
+            }
+        }
+    }
+
+    var alasan = ss.getSheetByName(ALASAN_SHEET_NAME);
+    if (alasan && alasan.getLastRow() > 1) {
+        var aData = alasan.getRange(2, 2, alasan.getLastRow() - 1, 6).getValues();
+        for (var a = 0; a < aData.length; a++) {
+            var npmA = normalizeNpm_(aData[a][0]);
+            var mkA = String(aData[a][3] || '').trim();
+            if (!npmA || !mkA || !rejected[npmA]) continue;
+            rejected[npmA][normalizeMkName_(mkA)] = { name: mkA, alasan: String(aData[a][5] || '').trim() };
+        }
+    }
+    return { approved: approved, rejected: rejected };
+}
+
+function readPaidNpms_(ss) {
+    var paid = {};
+    var sheet = ss.getSheetByName('Pembayaran');
+    if (sheet && sheet.getLastRow() > 1) {
+        var data = sheet.getRange(2, 2, sheet.getLastRow() - 1, 1).getValues();
+        for (var i = 0; i < data.length; i++) {
+            var npm = normalizeNpm_(data[i][0]);
+            if (npm) paid[npm] = true;
+        }
+    }
+    return paid;
+}
+
+function getDashboardData(token, filters) {
+    requireAdmin_(token);
+    filters = filters || {};
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var students = readPendaftaranStudents_(ss);
+    var decisions = readApprovedAndRejected_(ss, students);
+    var paid = readPaidNpms_(ss);
+    var emailStatus = readEmailAccStatus_(ss);
+
+    var stats = { totalPendaftar: 0, menunggu: 0, acc: 0, tidakAcc: 0, sudahBayar: 0, belumBayar: 0 };
+    var result = [];
+
+    for (var i = 0; i < students.length; i++) {
+        var s = students[i];
+        s.emailSent = !!emailStatus[s.npm];
+        var decidedCount = 0;
+        for (var m = 0; m < s.mks.length; m++) {
+            var mk = s.mks[m];
+            var key = normalizeMkName_(mk.name);
+            if (decisions.approved[s.npm] && decisions.approved[s.npm][key]) {
+                mk.status = 'ACC';
+            } else if (decisions.rejected[s.npm] && decisions.rejected[s.npm][key]) {
+                mk.status = 'Tidak ACC';
+                mk.alasan = decisions.rejected[s.npm][key].alasan;
+            }
+            if (mk.status !== 'Belum') decidedCount++;
+        }
+        s.bayar = !!paid[s.npm];
+        var picked = s.mks.length;
+        if (picked === 0) {
+            s.allDecided = false;
+            s.overall = 'Menunggu';
+        } else {
+            s.allDecided = decidedCount === picked;
+            var hasRejected = false;
+            var hasPending = false;
+            for (var q = 0; q < s.mks.length; q++) {
+                if (s.mks[q].status === 'Belum') hasPending = true;
+                if (s.mks[q].status === 'Tidak ACC') hasRejected = true;
+            }
+            if (hasPending) s.overall = 'Menunggu';
+            else if (hasRejected) s.overall = 'Tidak ACC';
+            else s.overall = 'ACC';
+        }
+
+        if (filters.angkatan && s.angkatan !== String(filters.angkatan).trim()) continue;
+        if (filters.semester && s.semesters.indexOf(String(filters.semester).trim()) === -1) continue;
+        if (filters.mk) {
+            var fk = normalizeMkName_(filters.mk);
+            var found = false;
+            for (var r = 0; r < s.mks.length; r++) { if (normalizeMkName_(s.mks[r].name) === fk) { found = true; break; } }
+            if (!found) continue;
+        }
+        if (filters.status && s.overall !== String(filters.status).trim()) continue;
+        if (filters.bayar === 'sudah' && !s.bayar) continue;
+        if (filters.bayar === 'belum' && s.bayar) continue;
+
+        stats.totalPendaftar++;
+        if (s.overall === 'Menunggu') stats.menunggu++;
+        if (s.overall === 'ACC') stats.acc++;
+        if (s.overall === 'Tidak ACC') stats.tidakAcc++;
+        if (s.bayar) stats.sudahBayar++;
+        result.push(s);
+    }
+    stats.belumBayar = stats.totalPendaftar - stats.sudahBayar;
+    return { stats: stats, students: result };
+}
+
+// ============================================================
+// DASHBOARD ADMIN: KEPUTUSAN MK
+// ============================================================
+
+function getStudentDecisionStatus_(ss, npm) {
+    var npmClean = normalizeNpm_(npm);
+    var pend = readPendaftaranStudents_(ss);
+    var student = null;
+    for (var i = 0; i < pend.length; i++) { if (pend[i].npm === npmClean) { student = pend[i]; break; } }
+    if (!student) return { npm: npmClean, mks: [], overall: 'Menunggu', bayar: false };
+    var decisions = readApprovedAndRejected_(ss, [student]);
+    var paid = readPaidNpms_(ss);
+    var emailStatus = readEmailAccStatus_(ss);
+    student.emailSent = !!emailStatus[npmClean];
+    var decidedCount = 0;
+    for (var m = 0; m < student.mks.length; m++) {
+        var mk = student.mks[m];
+        var key = normalizeMkName_(mk.name);
+        if (decisions.approved[npmClean] && decisions.approved[npmClean][key]) mk.status = 'ACC';
+        else if (decisions.rejected[npmClean] && decisions.rejected[npmClean][key]) { mk.status = 'Tidak ACC'; mk.alasan = decisions.rejected[npmClean][key].alasan; }
+        if (mk.status !== 'Belum') decidedCount++;
+    }
+    student.bayar = !!paid[npmClean];
+    if (student.mks.length === 0) student.overall = 'Menunggu';
+    else {
+        var hasPending = false, hasRejected = false;
+        for (var q = 0; q < student.mks.length; q++) {
+            if (student.mks[q].status === 'Belum') hasPending = true;
+            if (student.mks[q].status === 'Tidak ACC') hasRejected = true;
+        }
+        if (hasPending) student.overall = 'Menunggu';
+        else if (hasRejected) student.overall = 'Tidak ACC';
+        else student.overall = 'ACC';
+    }
+    return student;
+}
+
+function saveMkDecision(token, npm, mkName, decision, alasan) {
+    requireAdmin_(token);
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var lock = LockService.getScriptLock();
+    try {
+        lock.waitLock(30000);
+        var npmClean = normalizeNpm_(npm);
+        if (!npmClean) throw new Error('NPM tidak valid');
+        var pendSheet = ss.getSheetByName('Pendaftaran');
+        var rowIdx = findRowIndexByNpm_(pendSheet, npmClean);
+        if (rowIdx === -1) throw new Error('Mahasiswa tidak ditemukan di Pendaftaran');
+        var pendRow = pendSheet.getRange(rowIdx, 1, 1, Math.max(pendSheet.getLastColumn(), 92)).getValues()[0];
+        var nama = String(pendRow[2] || '').trim();
+        var angkatan = String(pendRow[5] || '').trim();
+        var semester = String(pendRow[6] || '').trim();
+        // upsertKirimRow_ / addAlasanRow_ mencocokkan NPM secara mentah (raw), jadi
+        // pakai NPM persis sebagaimana tersimpan di Pendaftaran agar selalu match.
+        var npmStored = String(pendRow[1] || '').trim() || npmClean;
+
+        var mkInfo = getMkColumnInfo_(mkName, semester);
+        if (!mkInfo || !mkInfo.pendCol) throw new Error('Mata kuliah tidak dikenali: ' + mkName);
+
+        var dec = String(decision || '').trim();
+        if (dec === 'ACC') {
+            upsertKirimRow_(ss, npmStored, nama, angkatan, mkName, mkInfo);
+            removeAlasanRow_(ss, npmStored, mkName);
+        } else if (dec === 'Tidak ACC') {
+            if (!String(alasan || '').trim()) throw new Error('Alasan wajib diisi untuk keputusan Tidak ACC');
+            removeFromKirim_(ss, npmStored, mkInfo);
+            addAlasanRow_(ss, npmStored, nama, angkatan, mkName, 'Dashboard', String(alasan).trim());
+        } else {
+            removeFromKirim_(ss, npmStored, mkInfo);
+            removeAlasanRow_(ss, npmStored, mkName);
+        }
+        checkAndSetACC_(ss, npmClean);
+        SpreadsheetApp.flush();
+        return getStudentDecisionStatus_(ss, npmClean);
+    } finally {
+        try { lock.releaseLock(); } catch (e) { }
+    }
+}
+
+// ============================================================
+// DASHBOARD ADMIN: EMAIL ACC + PDF
+// ============================================================
+
+var EMAIL_ACC_COL = 71; // Kolom BS (1-based)
+
+function readEmailAccStatus_(ss) {
+    var map = {};
+    var kirim = ss.getSheetByName(KIRIM_SHEET_NAME);
+    if (kirim && kirim.getLastRow() > 1) {
+        var lastCol = Math.max(kirim.getLastColumn(), EMAIL_ACC_COL);
+        var data = kirim.getRange(2, 1, kirim.getLastRow() - 1, lastCol).getValues();
+        for (var i = 0; i < data.length; i++) {
+            var npm = normalizeNpm_(data[i][1]);
+            if (!npm) continue;
+            map[npm] = String(data[i][EMAIL_ACC_COL - 1] || '').trim() === 'SENT';
+        }
+    }
+    return map;
+}
+
+function ensureEmailAccColumn_(ss) {
+    var kirimSheet = ss.getSheetByName(KIRIM_SHEET_NAME);
+    if (!kirimSheet) return;
+    if (kirimSheet.getLastColumn() < EMAIL_ACC_COL) {
+        kirimSheet.getRange(1, EMAIL_ACC_COL).setValue('Email ACC');
+    } else {
+        var h = String(kirimSheet.getRange(1, EMAIL_ACC_COL).getValue() || '').trim();
+        if (!h) kirimSheet.getRange(1, EMAIL_ACC_COL).setValue('Email ACC');
+    }
+}
+
+function getStudentByIdentity_(ss, npm) {
+    var sheet = ss.getSheetByName('Pendaftaran');
+    if (!sheet || sheet.getLastRow() <= 1) return null;
+    var lastCol = Math.max(sheet.getLastColumn(), 37);
+    var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim().toLowerCase(); });
+    var idxNpm = headers.indexOf('npm'); if (idxNpm < 0) idxNpm = 1;
+    var idxNama = headers.indexOf('nama lengkap'); if (idxNama < 0) idxNama = 2;
+    var idxEmail = headers.indexOf('email'); if (idxEmail < 0) idxEmail = 3;
+    var idxHp = headers.indexOf('no. hp/wa'); if (idxHp < 0) idxHp = 4;
+    var idxAngkatan = headers.indexOf('angkatan'); if (idxAngkatan < 0) idxAngkatan = 5;
+    var idxSemester = headers.indexOf('semester'); if (idxSemester < 0) idxSemester = 6;
+    var idxPasfoto = headers.indexOf('pasfoto url');
+    if (idxPasfoto < 0) idxPasfoto = headers.indexOf('foto 3x4');
+    if (idxPasfoto < 0) idxPasfoto = headers.indexOf('pas foto');
+    if (idxPasfoto < 0) idxPasfoto = headers.indexOf('pasfoto');
+    if (idxPasfoto < 0) idxPasfoto = 7;
+    var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, lastCol).getValues();
+    var npmClean = normalizeNpm_(npm);
+    for (var i = 0; i < data.length; i++) {
+        if (normalizeNpm_(data[i][idxNpm]) !== npmClean) continue;
+        return {
+            npm: npmClean,
+            nama: String(data[i][idxNama] || '').trim(),
+            email: String(data[i][idxEmail] || '').trim(),
+            hp: String(data[i][idxHp] || '').trim(),
+            angkatan: String(data[i][idxAngkatan] || '').trim(),
+            semester: String(data[i][idxSemester] || '').trim(),
+            pasfotoUrl: String(data[i][idxPasfoto] || '').trim()
+        };
+    }
+    return null;
+}
+
+function collectDecisions_(ss, npm) {
+    var npmClean = normalizeNpm_(npm);
+    var decisions = [];
+    var kirim = ss.getSheetByName(KIRIM_SHEET_NAME);
+    if (kirim && kirim.getLastRow() > 1) {
+        var kCols = Math.max(kirim.getLastColumn(), 92);
+        var kData = kirim.getRange(2, 1, kirim.getLastRow() - 1, kCols).getValues();
+        for (var i = 0; i < kData.length; i++) {
+            if (normalizeNpm_(kData[i][1]) !== npmClean) continue;
+            for (var j = 9; j <= 36; j++) {
+                var mk = String(kData[i][j] || '').trim();
+                if (mk) decisions.push({ name: mk, status: 'ACC', alasan: '' });
+            }
+            for (var j = 71; j <= 91; j++) {
+                var mk = String(kData[i][j] || '').trim();
+                if (mk) decisions.push({ name: mk, status: 'ACC', alasan: '' });
+            }
+            break;
+        }
+    }
+    var alasan = ss.getSheetByName(ALASAN_SHEET_NAME);
+    if (alasan && alasan.getLastRow() > 1) {
+        var aData = alasan.getRange(2, 2, alasan.getLastRow() - 1, 6).getValues();
+        for (var a = 0; a < aData.length; a++) {
+            if (normalizeNpm_(aData[a][0]) !== npmClean) continue;
+            var mkA = String(aData[a][3] || '').trim();
+            if (!mkA) continue;
+            decisions.push({ name: mkA, status: 'Tidak ACC', alasan: String(aData[a][5] || '').trim() });
+        }
+    }
+    return decisions;
+}
+
+var DEFAULT_PDF_LOGO_URL = 'https://drive.google.com/file/d/10fwZMVQFir7zu9uVQ6tWvxIIIVQ0ccrH/view?usp=sharing';
+
+var PDF_LINE_GREEN_ = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABLAAAAAECAIAAAARV1HoAAAAOElEQVR4nO3XMQEAMAjEwFIDOMFB/duqDIa/U5A11W8OAAAAee52AAAAADsMIQAAQChDCAAAEOoD6j4AgqCF9f8AAAAASUVORK5CYII=';
+var PDF_LINE_GOLD_ = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABLAAAAACCAIAAADHDrL1AAAAKElEQVR4nO3OQQEAQAQAsHNl9NZGKzE8bAkWXfkAAAC4528HAAAA2DGB3AGW7lFStAAAAABJRU5ErkJggg==';
+
+var PDF_IMAGE_CACHE_ = {};
+
+function pdf_extractFileIdFromUrl_(fileUrl) {
+    var url = String(fileUrl || '').trim();
+    if (!url) return '';
+    var m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (m) return m[1];
+    m = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (m) return m[1];
+    if (/^[a-zA-Z0-9_-]{20,}$/.test(url)) return url;
+    return '';
+}
+
+function pdf_embedImageDataUriFromDriveUrl_(fileUrl) {
+    var fileId = pdf_extractFileIdFromUrl_(fileUrl);
+    if (!fileId) return '';
+    var blob = DriveApp.getFileById(fileId).getBlob();
+    var bytes = blob.getBytes();
+    var b64 = Utilities.base64Encode(bytes);
+    var mt = blob.getContentType() || 'image/png';
+    return 'data:' + mt + ';base64,' + b64;
+}
+
+function pdf_getEmbeddedImage_(url) {
+    if (!url) return '';
+    if (PDF_IMAGE_CACHE_[url]) return PDF_IMAGE_CACHE_[url];
+    try {
+        var base64 = pdf_embedImageDataUriFromDriveUrl_(url);
+        PDF_IMAGE_CACHE_[url] = base64;
+        return base64;
+    } catch (e) {
+        Logger.log('pdf_getEmbeddedImage_ error: ' + e.message);
+        return url;
+    }
+}
+
+function pdf_getImageDimensionsFromDataUri_(dataUri) {
+    if (!dataUri) return null;
+    var m = dataUri.match(/^data:([^;]+);base64,(.*)$/);
+    if (!m) return null;
+    try {
+        var bytes = Utilities.base64Decode(m[2]);
+        var mt = String(m[1] || '').toLowerCase();
+        if (mt.indexOf('png') !== -1 && bytes.length >= 24) {
+            var w = ((bytes[16] & 0xff) << 24) | ((bytes[17] & 0xff) << 16) | ((bytes[18] & 0xff) << 8) | (bytes[19] & 0xff);
+            var h = ((bytes[20] & 0xff) << 24) | ((bytes[21] & 0xff) << 16) | ((bytes[22] & 0xff) << 8) | (bytes[23] & 0xff);
+            if (w > 0 && h > 0) return { w: w, h: h };
+        }
+        if ((mt.indexOf('jpeg') !== -1 || mt.indexOf('jpg') !== -1) && bytes.length > 12) {
+            var i = 2;
+            while (i + 9 < bytes.length) {
+                if (bytes[i] !== 0xff) { i++; continue; }
+                var marker = bytes[i + 1];
+                if (marker >= 0xc0 && marker <= 0xc3) {
+                    var jw = ((bytes[i + 7] & 0xff) << 8) | (bytes[i + 8] & 0xff);
+                    var jh = ((bytes[i + 5] & 0xff) << 8) | (bytes[i + 6] & 0xff);
+                    if (jw > 0 && jh > 0) return { w: jw, h: jh };
+                }
+                var segLen = ((bytes[i + 2] & 0xff) << 8) | (bytes[i + 3] & 0xff);
+                if (segLen < 2) break;
+                i += 2 + segLen;
+            }
+        }
+    } catch (e) {
+        Logger.log('pdf_getImageDimensionsFromDataUri_ error: ' + e.message);
+    }
+    return null;
+}
+
+function pdf_containSize_(w, h, maxW, maxH) {
+    if (!w || !h) return { w: maxW, h: maxH };
+    var scale = Math.min(maxW / w, maxH / h);
+    return { w: Math.round(w * scale), h: Math.round(h * scale) };
+}
+
+function formatSemesterRoman_(sem) {
+    var n = parseInt(String(sem || '').trim(), 10);
+    var roman = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII' };
+    var words = { 1: 'Satu', 2: 'Dua', 3: 'Tiga', 4: 'Empat', 5: 'Lima', 6: 'Enam', 7: 'Tujuh', 8: 'Delapan' };
+    if (!roman[n]) return String(sem || '').trim();
+    return roman[n] + ' (' + words[n] + ')';
+}
+
+function formatIndonesianDate_(date) {
+    var months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    var d = new Date(date);
+    if (isNaN(d.getTime())) return '';
+    return d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+function getTahunAjaranLabel_() {
+    var ta = getConfig_(CONFIG_KEYS.tahunAjaran) || '';
+    if (ta) return ta;
+    var now = new Date();
+    var y = now.getFullYear();
+    var month = now.getMonth() + 1;
+    if (month >= 8) return y + '/' + (y + 1);
+    return (y - 1) + '/' + y;
+}
+
+function buildAccLetterHtml_(student, decisions) {
+    var tpl;
+    try {
+        tpl = HtmlService.createHtmlOutputFromFile('pdf').getContent();
+    } catch (e) {
+        Logger.log('buildAccLetterHtml_ template load error: ' + e.message);
+        throw new Error('Template pdf.html tidak ditemukan');
+    }
+
+    var periode = getPeriodeLabel_();
+    var tahunAjaran = getTahunAjaranLabel_();
+    var logoUrl = getConfig_(CONFIG_KEYS.pdfLogoUrl) || DEFAULT_PDF_LOGO_URL;
+    var ttdUrl = getConfig_(CONFIG_KEYS.pdfTtdUrl) || '';
+    var logoSrc = pdf_getEmbeddedImage_(logoUrl);
+    var ttdSrc = ttdUrl ? pdf_getEmbeddedImage_(ttdUrl) : '';
+
+    var logoDim = pdf_getImageDimensionsFromDataUri_(logoSrc);
+    var logoSize = pdf_containSize_(logoDim ? logoDim.w : 95, logoDim ? logoDim.h : 95, 95, 95);
+
+    var pasFotoHtml = '';
+    if (student.pasfotoUrl) {
+        var pfSrc = pdf_getEmbeddedImage_(student.pasfotoUrl);
+        pasFotoHtml = '<img src="' + pfSrc + '" alt="Pas Foto" style="width:95px;height:115px;object-fit:cover;display:block;margin:0 auto;">';
+    } else {
+        pasFotoHtml = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:8px;color:#94a3b8;padding-top:45px;">3 x 4</div>';
+    }
+
+    var ttdImgHtml = '';
+    if (ttdSrc) {
+        ttdImgHtml = '<img src="' + ttdSrc + '" alt="Tanda Tangan" style="height:48px;width:auto;display:block;margin:0 auto;">';
+    } else {
+        ttdImgHtml = '<div style="height:48px;"></div>';
+    }
+
+    var rows = '';
+    var totalSks = 0;
+    for (var i = 0; i < decisions.length; i++) {
+        var d = decisions[i];
+        var info = getMkColumnInfo_(d.name, student.semester);
+        var sem = d.semester || (info && info.semLabel ? String(info.semLabel).replace('Sem', '') : student.semester);
+        var sks = d.sks || (info ? info.sks : '');
+        if (sks) totalSks += parseInt(String(sks).replace(/\D/g, ''), 10) || 0;
+        var rowBg = (i % 2 === 1) ? 'background:#f8fafc;' : '';
+        rows += '<tr>' +
+            '<td style="border:1px solid #cbd5e1;padding:3.5px 6px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;vertical-align:middle;line-height:1.2;' + rowBg + '">' + (i + 1) + '</td>' +
+            '<td style="border:1px solid #cbd5e1;padding:3.5px 6px;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;vertical-align:middle;line-height:1.2;' + rowBg + '">' + d.name + '</td>' +
+            '<td style="border:1px solid #cbd5e1;padding:3.5px 6px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;vertical-align:middle;line-height:1.2;' + rowBg + '">' + sem + '</td>' +
+            '<td style="border:1px solid #cbd5e1;padding:3.5px 6px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;font-weight:bold;vertical-align:middle;line-height:1.2;' + rowBg + '">' + sks + '</td>' +
+            '</tr>';
+    }
+
+    var now = new Date();
+    var timestamp = Utilities.formatDate(now, Session.getScriptTimeZone(), 'dd-MM-yyyy HH:mm:ss');
+
+    var map = {
+        '{{LOGO_SRC}}': logoSrc,
+        '{{LOGO_W}}': String(logoSize.w),
+        '{{LOGO_H}}': String(logoSize.h),
+        '{{GREEN_LINE}}': PDF_LINE_GREEN_,
+        '{{GOLD_LINE}}': PDF_LINE_GOLD_,
+        '{{PERIODE}}': periode,
+        '{{TAHUN_AJARAN}}': tahunAjaran,
+        '{{NAMA}}': student.nama,
+        '{{NPM}}': student.npm,
+        '{{NO_HP}}': student.hp,
+        '{{SEMESTER}}': formatSemesterRoman_(student.semester),
+        '{{PAS_FOTO}}': pasFotoHtml,
+        '{{MK_ROWS}}': rows,
+        '{{TOTAL_SKS}}': String(totalSks),
+        '{{TANGGAL_MEDAN}}': formatIndonesianDate_(now),
+        '{{TTD_IMG}}': ttdImgHtml,
+        '{{TIMESTAMP}}': timestamp
+    };
+    for (var key in map) {
+        if (Object.prototype.hasOwnProperty.call(map, key)) {
+            tpl = tpl.split(key).join(String(map[key]));
+        }
+    }
+    return tpl;
+}
+
+function buildAccEmailBodyHtml_(student, decisions) {
+    var rows = '';
+    for (var i = 0; i < decisions.length; i++) {
+        var d = decisions[i];
+        var statusTxt = d.status === 'ACC' ? 'DITERIMA' : 'TIDAK DITERIMA';
+        var alasanTxt = d.status === 'Tidak ACC' && d.alasan ? ' — ' + d.alasan : '';
+        rows += '<tr><td style="padding:6px;border-bottom:1px solid #eee;">' + d.name + '</td>' +
+            '<td style="padding:6px;border-bottom:1px solid #eee;"><strong>' + statusTxt + '</strong>' + alasanTxt + '</td></tr>';
+    }
+    return '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #ddd;border-radius:5px;">' +
+        '<h2 style="text-align:center;color:#003087;">Hasil Pemeriksaan Pendaftaran Remedial</h2>' +
+        '<p style="text-align:center;">Semester Ganjil 2026-2027 - Fakultas Kedokteran dan Ilmu Kesehatan UMSU</p>' +
+        '<hr style="border:1px solid #eee;">' +
+        '<p>Assalamu\'alaikum, ' + student.nama + ' (' + student.npm + '),</p>' +
+        '<p>Pendaftaran remedial Anda telah diperiksa. Berikut hasil pemeriksaan untuk setiap mata kuliah yang Anda pilih:</p>' +
+        '<table style="width:100%;border-collapse:collapse;">' + rows + '</table>' +
+        '<p style="margin-top:16px;">Detail lengkap dapat dilihat pada lampiran PDF surat keterangan.</p>' +
+        '<p>Untuk mata kuliah yang dinyatakan <strong>DITERIMA</strong>, silakan melakukan pembayaran lalu unggah bukti pembayaran pada link yang tersedia.</p>' +
+        '<hr style="border:1px solid #eee;">' +
+        '<p style="text-align:center;font-size:14px;color:#666;">Email ini dikirim otomatis oleh sistem pendaftaran remedial.</p>' +
+        '</div>';
+}
+
+function htmlToPdfBlob_(html, baseName) {
+    var folderId = getFolderId();
+    var htmlBlob = Utilities.newBlob(html, 'text/html', baseName + '.html');
+    var docId = null;
+    try {
+        var docFile = Drive.Files.insert(
+            { title: baseName, mimeType: 'text/html', parents: [{ id: folderId }] },
+            htmlBlob,
+            { convert: true }
+        );
+        docId = docFile.id;
+        applyPdfDocFormatting_(docId);
+        var exportUrl = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(docId) +
+            '/export?mimeType=application/pdf';
+        var pdfResp = UrlFetchApp.fetch(exportUrl, {
+            headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+            muteHttpExceptions: true
+        });
+        if (pdfResp.getResponseCode() !== 200) {
+            throw new Error('Gagal mengekspor PDF: ' + pdfResp.getResponseCode() + ' ' + pdfResp.getContentText());
+        }
+        return Utilities.newBlob(pdfResp.getContent(), 'application/pdf', baseName + '.pdf');
+    } finally {
+        if (docId) {
+            try { DriveApp.getFileById(docId).setTrashed(true); } catch (e) { }
+        }
+    }
+}
+
+function applyPdfDocFormatting_(docId) {
+    var doc = null;
+    try {
+        doc = DocumentApp.openById(docId);
+        var body = doc.getBody();
+        var topPt = 0;        // 0 margin atas agar benar-benar mepet ke atas kertas
+        var sidePt = 25;      // ~0.88 cm margin samping
+        var bottomPt = 20;    // ~0.7 cm margin bawah
+        
+        body.setMarginTop(topPt);
+        body.setMarginBottom(bottomPt);
+        body.setMarginLeft(sidePt);
+        body.setMarginRight(sidePt);
+
+        // Hapus atau ciutkan paragraf kosong di awal body dokumen
+        while (body.getNumChildren() > 1) {
+            var firstChild = body.getChild(0);
+            if (firstChild.getType() === DocumentApp.ElementType.PARAGRAPH) {
+                var p = firstChild.asParagraph();
+                if (!p.getText() || p.getText().trim() === '') {
+                    try {
+                        p.removeFromParent();
+                    } catch (e) {
+                        p.setFontSize(1);
+                        p.setSpacingBefore(0);
+                        p.setSpacingAfter(0);
+                        p.setLineSpacing(0.01);
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        // Hilangkan spacing default pada semua paragraf
+        var numBodyChildren = body.getNumChildren();
+        for (var bi = 0; bi < numBodyChildren; bi++) {
+            var el = body.getChild(bi);
+            if (el.getType() === DocumentApp.ElementType.PARAGRAPH) {
+                try {
+                    el.asParagraph().setSpacingBefore(0).setSpacingAfter(0);
+                } catch (e) { }
+            }
+        }
+
+        var contentWidth = body.getPageWidth() - sidePt * 2;
+        var tables = body.getTables();
+        for (var i = 0; i < tables.length; i++) {
+            var table = tables[i];
+            var numRows = table.getNumRows();
+            var numCols = numRows > 0 ? table.getRow(0).getNumCells() : 0;
+            var totalW = 0;
+            var colW = [];
+            for (var c = 0; c < numCols; c++) {
+                var w = 0;
+                try { w = table.getColumnWidth(c); } catch (e) { }
+                colW.push(w);
+                totalW += w;
+            }
+            if (totalW > 0) {
+                var scale = contentWidth / totalW;
+                for (var c2 = 0; c2 < numCols; c2++) {
+                    try { table.setColumnWidth(c2, colW[c2] * scale); } catch (e) { }
+                }
+            }
+            for (var r = 0; r < numRows; r++) {
+                var nCells = table.getRow(r).getNumCells();
+                for (var c3 = 0; c3 < nCells; c3++) {
+                    var cell = table.getRow(r).getCell(c3);
+                    try { cell.setVerticalAlignment(DocumentApp.VerticalAlignment.CENTER); } catch (e) { }
+                    try { cell.setPaddingTop(2).setPaddingBottom(2); } catch (e) { }
+                    var paras = cell.getParagraphs();
+                    for (var p = 0; p < paras.length; p++) {
+                        try { paras[p].setSpacingBefore(0).setSpacingAfter(0); } catch (e) { }
+                    }
+                }
+            }
+        }
+        return true;
+    } catch (e) {
+        Logger.log('applyPdfDocFormatting_ error: ' + e.message);
+        return false;
+    } finally {
+        if (doc) {
+            try { doc.saveAndClose(); } catch (eSave) {
+                Logger.log('applyPdfDocFormatting_ saveAndClose error: ' + eSave.message);
+            }
+        }
+    }
+}
+
+function sendAccEmailWithPdf_(ss, npm, force) {
+    var npmClean = normalizeNpm_(npm);
+    if (!npmClean) return { status: 'error', message: 'NPM tidak valid' };
+    ensureEmailAccColumn_(ss);
+
+    var kirimSheet = ss.getSheetByName(KIRIM_SHEET_NAME);
+    var rowIdx = findRowIndexByNpm_(kirimSheet, npmClean);
+    if (rowIdx === -1) return { status: 'skipped', message: 'Baris Kirim tidak ditemukan' };
+
+    var sentVal = String(kirimSheet.getRange(rowIdx, EMAIL_ACC_COL).getValue() || '').trim();
+    if (sentVal === 'SENT' && !force) return { status: 'skipped', message: 'Email sudah terkirim sebelumnya' };
+
+    var student = getStudentByIdentity_(ss, npmClean);
+    if (!student) return { status: 'error', message: 'Mahasiswa tidak ditemukan' };
+    if (!student.email) return { status: 'error', message: 'Email mahasiswa kosong' };
+
+    var decisions = collectDecisions_(ss, npmClean);
+    if (!decisions || decisions.length === 0) return { status: 'skipped', message: 'Belum ada keputusan' };
+
+    var pdfBlob = htmlToPdfBlob_(buildAccLetterHtml_(student, decisions), 'surat-remedial-' + npmClean);
+    MailApp.sendEmail({
+        to: student.email,
+        subject: 'Hasil Pemeriksaan Pendaftaran Remedial Semester ' + getPeriodeLabel_() + ' - FKIK UMSU',
+        htmlBody: buildAccEmailBodyHtml_(student, decisions),
+        attachments: [pdfBlob],
+        name: 'FKIK UMSU - Pendaftaran Remedial'
+    });
+    kirimSheet.getRange(rowIdx, EMAIL_ACC_COL).setValue('SENT');
+    return { status: 'success', message: 'Email ACC terkirim' };
+}
+
+// ============================================================
+// DASHBOARD ADMIN: PEMBAYARAN
+// ============================================================
+
+function ensurePembayaranVerifColumn_(ss) {
+    var sheet = ss.getSheetByName('Pembayaran');
+    if (!sheet) return 5;
+    var lastCol = sheet.getLastColumn();
+    var idx = -1;
+    if (lastCol >= 7) {
+        var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim().toLowerCase(); });
+        idx = headers.indexOf('status verifikasi');
+    }
+    if (idx === -1) {
+        idx = Math.max(lastCol, 6);
+        sheet.getRange(1, idx + 1).setValue('Status Verifikasi');
+        if (sheet.getLastRow() > 1) {
+            sheet.getRange(2, idx + 1, sheet.getLastRow() - 1, 1).setValue('Belum Diverifikasi');
+        }
+    }
+    return idx;
+}
+
+function getPembayaranData(token) {
+    requireAdmin_(token);
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var sheet = ss.getSheetByName('Pembayaran');
+    var list = [];
+    if (!sheet || sheet.getLastRow() <= 1) return list;
+    var verifIdx = ensurePembayaranVerifColumn_(ss);
+    var lastCol = Math.max(sheet.getLastColumn(), verifIdx + 1);
+    var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, lastCol).getValues();
+    for (var i = 0; i < data.length; i++) {
+        var npm = normalizeNpm_(data[i][1]);
+        if (!npm) continue;
+        var verif = verifIdx >= 0 ? String(data[i][verifIdx] || '').trim() : 'Belum Diverifikasi';
+        if (!verif) verif = 'Belum Diverifikasi';
+        list.push({
+            timestamp: data[i][0] ? String(data[i][0]) : '',
+            npm: npm,
+            nama: String(data[i][2] || '').trim(),
+            totalSks: String(data[i][3] || '').trim(),
+            buktiPendaftaranUrl: String(data[i][4] || '').trim(),
+            buktiPembayaranUrl: String(data[i][5] || '').trim(),
+            statusVerifikasi: verif
+        });
+    }
+    return list;
+}
+
+function verifyPembayaran(token, npm) {
+    requireAdmin_(token);
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var sheet = ss.getSheetByName('Pembayaran');
+    if (!sheet) throw new Error('Sheet Pembayaran tidak ditemukan');
+    var npmClean = normalizeNpm_(npm);
+    if (!npmClean) throw new Error('NPM tidak valid');
+    var verifIdx = ensurePembayaranVerifColumn_(ss);
+    var lastRow = sheet.getLastRow();
+    var npmValues = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
+    for (var i = 0; i < npmValues.length; i++) {
+        if (normalizeNpm_(npmValues[i][0]) === npmClean) {
+            sheet.getRange(i + 2, verifIdx + 1).setValue('Sudah Diverifikasi');
+            return { status: 'success', message: 'Pembayaran ' + npmClean + ' ditandai terverifikasi' };
+        }
+    }
+    throw new Error('NPM tidak ditemukan di Pembayaran');
+}
+
+// ============================================================
+// DASHBOARD TESTS (jalankan manual dari editor GAS)
+// ============================================================
+
+function dashboardTests() {
+    var out = [];
+    function expect(name, cond, detail) {
+        out.push((cond ? 'PASS' : 'FAIL') + ' | ' + name + (detail ? ' | ' + detail : ''));
+    }
+
+    var bad = verifyAdminLogin('salah');
+    expect('login password salah ditolak', bad.status === 'error', JSON.stringify(bad));
+    var good = verifyAdminLogin(ADMIN_DASHBOARD_DEFAULT_PASSWORD);
+    expect('login password benar', good.status === 'success', JSON.stringify(good));
+    var token = good.token || '';
+    var authOk = true;
+    try { requireAdmin_(token); } catch (e) { authOk = false; }
+    expect('token valid lolos requireAdmin_', authOk);
+    var authBad = true;
+    try { requireAdmin_('bogus'); } catch (e) { authBad = false; }
+    expect('token bogus ditolak', !authBad);
+
+    var data = getDashboardData(token, {});
+    expect('getDashboardData mengembalikan stats', data && data.stats && typeof data.stats.totalPendaftar === 'number', JSON.stringify(data && data.stats));
+    expect('getDashboardData mengembalikan array students', data && Array.isArray(data.students), 'count=' + (data && data.students ? data.students.length : 0));
+
+    var pay = getPembayaranData(token);
+    expect('getPembayaranData array', Array.isArray(pay), 'count=' + (pay ? pay.length : 0));
+
+    var izin = getIzinList(token);
+    expect('getIzinList array', Array.isArray(izin), 'count=' + (izin ? izin.length : 0));
+
+    // Pengaturan (Config)
+    try {
+        ensureConfigSeeded_();
+        var seededOk = getConfig_(CONFIG_KEYS.seeded) === '1';
+        expect('ensureConfigSeeded_ menandai marker seeded', seededOk);
+        var periodeVal = getConfig_(CONFIG_KEYS.periode);
+        expect('periode ter-seed (ganjil/genap)', periodeVal === 'ganjil' || periodeVal === 'genap', 'periode=' + periodeVal);
+        var modeVal = getConfig_(CONFIG_KEYS.uploadMode);
+        expect('upload_mode default/bypass', modeVal === 'default' || modeVal === 'bypass', 'mode=' + modeVal);
+        var b = checkFormAvailability();
+        expect('checkFormAvailability(Config) objek valid', b && typeof b.isAvailable === 'boolean', JSON.stringify(b));
+    } catch (e) {
+        out.push('Config test ERROR: ' + e.message);
+    }
+
+    // getSettings / saveSettings
+    try {
+        var settingsAuthBlocked = false;
+        try { getSettings('invalid-token'); } catch (e) { settingsAuthBlocked = true; }
+        expect('getSettings token invalid ditolak', settingsAuthBlocked);
+        var st = getSettings(token);
+        expect('getSettings mengembalikan periode valid', st && (st.periode === 'ganjil' || st.periode === 'genap'), JSON.stringify(st));
+        expect('getSettings jadwal berstatus', st && st.jadwal && st.jadwal.pendaftaran && ['open', 'not_yet', 'closed'].indexOf(st.jadwal.pendaftaran.status) !== -1, JSON.stringify(st && st.jadwal));
+        saveSettings(token, { tahunAjaran: '2026/2027' });
+        expect('saveSettings tersimpan', getConfig_(CONFIG_KEYS.tahunAjaran) === '2026/2027');
+        saveSettings(token, { tahunAjaran: '' });
+        expect('saveSettings hapus nilai (empty = open)', getConfig_(CONFIG_KEYS.tahunAjaran) === '');
+    } catch (e) {
+        out.push('Settings test ERROR: ' + e.message);
+    }
+
+    // MK admin
+    try {
+        var mkAuthBlocked = false;
+        try { getMkAdminData('invalid-token'); } catch (e) { mkAuthBlocked = true; }
+        expect('getMkAdminData token invalid ditolak', mkAuthBlocked);
+        var mk = getMkAdminData(token);
+        expect('getMkAdminData set ganjil lengkap', mk && mk.ganjil && mk.ganjil.Sem1 && mk.ganjil.Sem1.length === 7, JSON.stringify(mk && mk.ganjil && mk.ganjil.Sem1));
+        expect('getMkAdminData set genap lengkap', mk && mk.genap && mk.genap.Sem2 && mk.genap.Sem2.length === 7, JSON.stringify(mk && mk.genap && mk.genap.Sem2));
+        expect('getMkAdminData masterSks objek', mk && typeof mk.masterSks === 'object');
+        saveMkAdminData(token, 'ganjil', 'Sem1', [{ nama: 'MK Test', sks: '2' }, {}, {}, {}, {}, {}, {}]);
+        var mk2 = getMkAdminData(token);
+        expect('saveMkAdminData menulis MK', mk2 && mk2.ganjil.Sem1[0] && mk2.ganjil.Sem1[0].nama === 'MK Test', JSON.stringify(mk2 && mk2.ganjil.Sem1[0]));
+        expect('saveMkAdminData upsert SKS', mk2 && mk2.masterSks['MK Test'] === '2');
+        saveMkAdminData(token, 'ganjil', 'Sem1', [{ nama: '', sks: '' }, {}, {}, {}, {}, {}, {}]);
+        var ssMk = SpreadsheetApp.openById(getSpreadsheetId());
+        var mkSheetT = ssMk.getSheetByName(MK_SHEET_NAME);
+        if (mkSheetT) {
+            var namesT = mkSheetT.getRange(2, 1, Math.max(mkSheetT.getLastRow() - 1, 1), 1).getValues();
+            for (var k = namesT.length - 1; k >= 0; k--) {
+                if (String(namesT[k][0] || '').trim() === 'MK Test') mkSheetT.deleteRow(k + 2);
+            }
+        }
+    } catch (e) {
+        out.push('MK admin test ERROR: ' + e.message);
+    }
+
+    Logger.log('\n===== DASHBOARD TESTS =====\n' + out.join('\n'));
+    return out;
+}
+
+// ============================================================
+// DASHBOARD ADMIN: RESEND EMAIL + REVIEW PER MK + EDIT PROFIL + AUTO CEK
+// ============================================================
+
+function resendAccEmail(token, npm) {
+    requireAdmin_(token);
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    return sendAccEmailWithPdf_(ss, normalizeNpm_(npm), true);
+}
+
+function getMkOptions(token) {
+    requireAdmin_(token);
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var mkSheet = ss.getSheetByName(MK_SHEET_NAME);
+    var options = [];
+    if (!mkSheet || mkSheet.getLastRow() < 2) return options;
+    var lastRow = mkSheet.getLastRow();
+    var vals = mkSheet.getRange(2, 4, lastRow - 1, 8).getValues(); // kolom D..K (ganjil + genap)
+    MK_COL_MAP.concat(MK_GENAP_PEND_COL_MAP).forEach(function (cfg) {
+        var colOffset = cfg.mkSheetCol - 4;
+        for (var i = 0; i < vals.length; i++) {
+            var name = String(vals[i][colOffset] || '').trim();
+            if (!name) continue;
+            if (i < cfg.slots) options.push({ name: name, semester: cfg.semLabel });
+        }
+    });
+    return options;
+}
+
+function getMkReviewData(token, mkName) {
+    requireAdmin_(token);
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var mkKey = normalizeMkName_(mkName);
+    if (!mkKey) throw new Error('Pilih mata kuliah terlebih dahulu');
+
+    var all = readPendaftaranStudents_(ss);
+    var semester = '';
+    var picked = [];
+    all.forEach(function (s) {
+        var found = null;
+        (s.mks || []).forEach(function (m) {
+            if (normalizeMkName_(m.name) === mkKey) found = m;
+        });
+        if (found) {
+            semester = found.semester;
+            picked.push({
+                npm: s.npm, nama: s.nama, angkatan: s.angkatan, semester: s.semester,
+                status: 'Belum', alasan: ''
+            });
+        }
+    });
+
+    var decisions = readApprovedAndRejected_(ss, all);
+    var summary = { total: picked.length, acc: 0, tidakAcc: 0, belum: 0 };
+    picked.forEach(function (st) {
+        var a = decisions.approved[st.npm] && decisions.approved[st.npm][mkKey];
+        var r = decisions.rejected[st.npm] && decisions.rejected[st.npm][mkKey];
+        if (a) st.status = 'ACC';
+        else if (r) { st.status = 'Tidak ACC'; st.alasan = r.alasan; }
+        if (st.status === 'ACC') summary.acc++;
+        else if (st.status === 'Tidak ACC') summary.tidakAcc++;
+        else summary.belum++;
+    });
+
+    return { mkName: mkName, semester: semester, summary: summary, students: picked };
+}
+
+function updateStudentProfile(token, npm, fields) {
+    requireAdmin_(token);
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var lock = LockService.getScriptLock();
+    try {
+        lock.waitLock(30000);
+        var npmClean = normalizeNpm_(npm);
+        if (!npmClean) throw new Error('NPM tidak valid');
+        var sheet = ss.getSheetByName('Pendaftaran');
+        var rowIdx = findRowIndexByNpm_(sheet, npmClean);
+        if (rowIdx === -1) throw new Error('Mahasiswa tidak ditemukan');
+
+        fields = fields || {};
+        var updates = {};
+        if (fields.nama != null) updates[2] = String(fields.nama).trim();
+        if (fields.email != null) updates[3] = String(fields.email).trim();
+        if (fields.hp != null) updates[4] = String(fields.hp).trim();
+        if (fields.angkatan != null) updates[5] = String(fields.angkatan).trim();
+        if (fields.semester != null) updates[6] = String(fields.semester).trim();
+        var keys = Object.keys(updates);
+        if (keys.length === 0) throw new Error('Tidak ada field yang diubah');
+
+        var row = sheet.getRange(rowIdx, 1, 1, Math.max(sheet.getLastColumn(), 37)).getValues()[0];
+        keys.forEach(function (idx) { row[idx] = updates[idx]; });
+        sheet.getRange(rowIdx, 1, 1, row.length).setValues([row]);
+        ensureTextFormatForHeader(sheet, 'No. HP/WA');
+
+        try {
+            var headers = sheet.getRange(1, 1, 1, row.length).getValues()[0].map(function (h) { return String(h).trim().toLowerCase(); });
+            var supaRow = buildPendaftaranSupabaseRow_(headers, row);
+            if (supaRow) syncToSupabase_('pendaftaran', supaRow, 'npm');
+        } catch (syncErr) {
+            Logger.log('updateStudentProfile sync warning: ' + syncErr.message);
+        }
+        return getStudentDecisionStatus_(ss, npmClean);
+    } finally {
+        try { lock.releaseLock(); } catch (e) { }
+    }
+}
+
+function autoCheckBukti(token, npm) {
+    requireAdmin_(token);
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var npmClean = normalizeNpm_(npm);
+    if (!npmClean) throw new Error('NPM tidak valid');
+    var sheet = ss.getSheetByName('Pembayaran');
+    if (!sheet || sheet.getLastRow() <= 1) throw new Error('Data pembayaran tidak ditemukan');
+    var data = sheet.getRange(2, 2, sheet.getLastRow() - 1, 5).getValues();
+    var url = '';
+    for (var i = 0; i < data.length; i++) {
+        if (normalizeNpm_(data[i][0]) === npmClean) { url = String(data[i][4] || '').trim(); break; }
+    }
+    if (!url) throw new Error('Bukti pembayaran tidak ditemukan untuk ' + npmClean);
+    var check = validatePaymentPdfNpm_(url, npmClean);
+    return { status: 'success', npm: npmClean, valid: check.valid, reason: check.reason };
+}
+
+// ============================================================
+// DASHBOARD ADMIN: PENGATURAN (Config sheet)
+// ============================================================
+
+var CONFIG_SHEET_NAME = 'Config';
+var CONFIG_KEYS = {
+    periode: 'periode',
+    tahunAjaran: 'tahun_ajaran',
+    pendaftaranBuka: 'jadwal_pendaftaran_buka',
+    pendaftaranTutup: 'jadwal_pendaftaran_tutup',
+    uploadBuka: 'jadwal_upload_buka',
+    uploadTutup: 'jadwal_upload_tutup',
+    uploadMode: 'upload_mode',
+    pdfLogoUrl: 'pdf_logo_url',
+    pdfTtdUrl: 'pdf_ttd_url',
+    seeded: 'seeded'
+};
+
+function ensureConfigSheet_(ss) {
+    ss = ss || SpreadsheetApp.openById(getSpreadsheetId());
+    var sheet = ss.getSheetByName(CONFIG_SHEET_NAME);
+    if (!sheet) {
+        sheet = ss.insertSheet(CONFIG_SHEET_NAME);
+        sheet.appendRow(['Key', 'Value', 'Keterangan']);
+        sheet.getRange('A1:C1').setBackground('#003087').setFontColor('#ffffff').setFontWeight('bold');
+    }
+    return sheet;
+}
+
+function getConfig_(key) {
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var sheet = ensureConfigSheet_(ss);
+    if (sheet.getLastRow() <= 1) return '';
+    var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+    for (var i = 0; i < data.length; i++) {
+        if (String(data[i][0]).trim() === key) return String(data[i][1] || '').trim();
+    }
+    return '';
+}
+
+function setConfig_(key, value) {
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var sheet = ensureConfigSheet_(ss);
+    if (sheet.getLastRow() <= 1) {
+        sheet.appendRow([key, String(value)]);
+        return;
+    }
+    var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+    for (var i = 0; i < data.length; i++) {
+        if (String(data[i][0]).trim() === key) {
+            sheet.getRange(i + 2, 2).setValue(String(value));
+            return;
+        }
+    }
+    sheet.appendRow([key, String(value)]);
+}
+
+function formatConfigDate_(val) {
+    if (!val) return '';
+    var d = (val instanceof Date) ? val : parseDateValue_(val);
+    if (isNaN(d.getTime())) return '';
+    return Utilities.formatDate(d, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+}
+
+function parseConfigDate_(val) {
+    if (!val) return null;
+    var d = parseDateValue_(val);
+    return isNaN(d.getTime()) ? null : d;
+}
+
+function ensureConfigSeeded_() {
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    ensureConfigSheet_(ss);
+    if (getConfig_(CONFIG_KEYS.seeded)) return;
+    if (!getConfig_(CONFIG_KEYS.periode)) setConfig_(CONFIG_KEYS.periode, 'ganjil');
+    if (!getConfig_(CONFIG_KEYS.tahunAjaran)) setConfig_(CONFIG_KEYS.tahunAjaran, '');
+    var dmSheet = ss.getSheetByName('DM');
+    if (dmSheet) {
+        var d = dmSheet.getRange('G2:G4').getValues();
+        if (!getConfig_(CONFIG_KEYS.pendaftaranBuka)) setConfig_(CONFIG_KEYS.pendaftaranBuka, formatConfigDate_(d[0][0]));
+        if (!getConfig_(CONFIG_KEYS.pendaftaranTutup)) setConfig_(CONFIG_KEYS.pendaftaranTutup, formatConfigDate_(d[2][0]));
+        var u = dmSheet.getRange('G8:G10').getValues();
+        if (!getConfig_(CONFIG_KEYS.uploadBuka)) setConfig_(CONFIG_KEYS.uploadBuka, formatConfigDate_(u[0][0]));
+        if (!getConfig_(CONFIG_KEYS.uploadTutup)) setConfig_(CONFIG_KEYS.uploadTutup, formatConfigDate_(u[2][0]));
+    }
+    if (!getConfig_(CONFIG_KEYS.uploadMode)) {
+        var mode = 'default';
+        var mkSheet = ss.getSheetByName('MK');
+        if (mkSheet) {
+            var v = String(mkSheet.getRange('G12').getValue() || '').trim().toLowerCase();
+            if (v === 'bypass') mode = 'bypass';
+        }
+        setConfig_(CONFIG_KEYS.uploadMode, mode);
+    }
+    if (!getConfig_(CONFIG_KEYS.pdfLogoUrl)) setConfig_(CONFIG_KEYS.pdfLogoUrl, DEFAULT_PDF_LOGO_URL);
+    setConfig_(CONFIG_KEYS.seeded, '1');
+}
+
+// ============================================================
+// DASHBOARD ADMIN: PENGATURAN (getSettings / saveSettings)
+// ============================================================
+
+function getSettings(token) {
+    requireAdmin_(token);
+    ensureConfigSeeded_();
+    var now = new Date();
+    function scheduleStatus_(buka, tutup) {
+        var b = parseConfigDate_(buka);
+        var t = parseConfigDate_(tutup);
+        if (!b || !t) return 'open';
+        if (now < b) return 'not_yet';
+        if (now > t) return 'closed';
+        return 'open';
+    }
+    return {
+        status: 'success',
+        periode: getConfig_(CONFIG_KEYS.periode) || 'ganjil',
+        tahunAjaran: getConfig_(CONFIG_KEYS.tahunAjaran) || '',
+        jadwal: {
+            pendaftaran: {
+                buka: getConfig_(CONFIG_KEYS.pendaftaranBuka),
+                tutup: getConfig_(CONFIG_KEYS.pendaftaranTutup),
+                status: scheduleStatus_(getConfig_(CONFIG_KEYS.pendaftaranBuka), getConfig_(CONFIG_KEYS.pendaftaranTutup))
+            },
+            upload: {
+                buka: getConfig_(CONFIG_KEYS.uploadBuka),
+                tutup: getConfig_(CONFIG_KEYS.uploadTutup),
+                status: scheduleStatus_(getConfig_(CONFIG_KEYS.uploadBuka), getConfig_(CONFIG_KEYS.uploadTutup))
+            }
+        },
+        uploadMode: getConfig_(CONFIG_KEYS.uploadMode) || 'default',
+        pdf: {
+            logoUrl: getConfig_(CONFIG_KEYS.pdfLogoUrl) || DEFAULT_PDF_LOGO_URL,
+            ttdUrl: getConfig_(CONFIG_KEYS.pdfTtdUrl) || ''
+        }
+    };
+}
+
+function normalizeDateTimeValue_(val) {
+    if (!val) return '';
+    if (val instanceof Date) return formatConfigDate_(val);
+    var m = String(val).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (m) return m[3] + '/' + m[2] + '/' + m[1] + ' ' + m[4] + ':' + m[5];
+    return String(val).trim();
+}
+
+function saveSettings(token, data) {
+    requireAdmin_(token);
+    data = data || {};
+    var lock = LockService.getScriptLock();
+    try {
+        lock.waitLock(30000);
+        if (data.periode === 'ganjil' || data.periode === 'genap') setConfig_(CONFIG_KEYS.periode, data.periode);
+        if (data.tahunAjaran != null) setConfig_(CONFIG_KEYS.tahunAjaran, String(data.tahunAjaran).trim());
+        if (data.pendaftaranBuka != null) setConfig_(CONFIG_KEYS.pendaftaranBuka, normalizeDateTimeValue_(data.pendaftaranBuka));
+        if (data.pendaftaranTutup != null) setConfig_(CONFIG_KEYS.pendaftaranTutup, normalizeDateTimeValue_(data.pendaftaranTutup));
+        if (data.uploadBuka != null) setConfig_(CONFIG_KEYS.uploadBuka, normalizeDateTimeValue_(data.uploadBuka));
+        if (data.uploadTutup != null) setConfig_(CONFIG_KEYS.uploadTutup, normalizeDateTimeValue_(data.uploadTutup));
+        if (data.uploadMode === 'default' || data.uploadMode === 'bypass') setConfig_(CONFIG_KEYS.uploadMode, data.uploadMode);
+        if (data.pdfLogoUrl != null) setConfig_(CONFIG_KEYS.pdfLogoUrl, String(data.pdfLogoUrl).trim());
+        if (data.pdfTtdUrl != null) setConfig_(CONFIG_KEYS.pdfTtdUrl, String(data.pdfTtdUrl).trim());
+        return { status: 'success', message: 'Pengaturan tersimpan' };
+    } finally {
+        try { lock.releaseLock(); } catch (e) { }
+    }
+}
+
+var MK_GENAP_COL_MAP = [
+    { mkSheetCol: 8, semLabel: 'Sem2', startIdx: 9, slots: 7 },   // H (paralel J:P)
+    { mkSheetCol: 9, semLabel: 'Sem4', startIdx: 16, slots: 7 },  // I (paralel Q:W)
+    { mkSheetCol: 10, semLabel: 'Sem6', startIdx: 23, slots: 7 },  // J (paralel X:AD)
+    { mkSheetCol: 11, semLabel: 'Sem8', startIdx: 30, slots: 7 }   // K (paralel AE:AK)
+];
+
+function ensureMkGenapHeaders_(mkSheet) {
+    if (!mkSheet) return;
+    var labels = { H: 'Sem2', I: 'Sem4', J: 'Sem6', K: 'Sem8' };
+    ['H', 'I', 'J', 'K'].forEach(function (c) {
+        var v = String(mkSheet.getRange(c + '1').getValue() || '').trim();
+        if (!v) mkSheet.getRange(c + '1').setValue(labels[c]).setFontWeight('bold');
+    });
+}
+
+function getMkAdminData(token) {
+    requireAdmin_(token);
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var mkSheet = ss.getSheetByName(MK_SHEET_NAME);
+    var result = { ganjil: {}, genap: {}, masterSks: {} };
+    if (!mkSheet || mkSheet.getLastRow() < 2) return result;
+    ensureMkGenapHeaders_(mkSheet);
+    var lastRow = mkSheet.getLastRow();
+    var names = mkSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    var sksVals = mkSheet.getRange(2, 2, lastRow - 1, 1).getValues();
+    for (var i = 0; i < names.length; i++) {
+        var n = String(names[i][0] || '').trim();
+        if (n) result.masterSks[n] = String(sksVals[i][0] || '').trim();
+    }
+    var cols = mkSheet.getRange(2, 4, Math.max(lastRow - 1, 7), 8).getValues(); // D..K
+    [MK_COL_MAP, MK_GENAP_COL_MAP].forEach(function (cfgSet, setIdx) {
+        var setKey = setIdx === 0 ? 'ganjil' : 'genap';
+        cfgSet.forEach(function (cfg) {
+            var arr = [];
+            var col = cfg.mkSheetCol - 4;
+            for (var r = 0; r < cfg.slots; r++) {
+                var name = r < cols.length ? String(cols[r][col] || '').trim() : '';
+                arr.push(name ? { nama: name, sks: result.masterSks[name] || '' } : { nama: '', sks: '' });
+            }
+            result[setKey][cfg.semLabel] = arr;
+        });
+    });
+    return result;
+}
+
+function upsertMkSks_(mkSheet, name, sks) {
+    var lastRow = Math.max(mkSheet.getLastRow(), 2);
+    var names = mkSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < names.length; i++) {
+        if (String(names[i][0] || '').trim() === name) {
+            if (sks) mkSheet.getRange(i + 2, 2).setValue(sks);
+            return;
+        }
+    }
+    mkSheet.appendRow([name, sks]);
+}
+
+function saveMkAdminData(token, set, semester, slots) {
+    requireAdmin_(token);
+    var lock = LockService.getScriptLock();
+    try {
+        lock.waitLock(30000);
+        var ss = SpreadsheetApp.openById(getSpreadsheetId());
+        var mkSheet = ss.getSheetByName(MK_SHEET_NAME);
+        if (!mkSheet) throw new Error('Sheet MK tidak ditemukan');
+        ensureMkGenapHeaders_(mkSheet);
+        var colMap = set === 'genap' ? MK_GENAP_COL_MAP : MK_COL_MAP;
+        var cfg = null;
+        colMap.forEach(function (c) { if (c.semLabel === semester) cfg = c; });
+        if (!cfg) throw new Error('Semester tidak valid: ' + semester);
+        var list = slots || [];
+        var values = [];
+        for (var i = 0; i < cfg.slots; i++) {
+            var item = list[i] || '';
+            var nama = (item && item.nama != null) ? String(item.nama).trim() : String(item).trim();
+            values.push([nama]);
+        }
+        mkSheet.getRange(2, cfg.mkSheetCol, cfg.slots, 1).setValues(values);
+        for (var j = 0; j < cfg.slots; j++) {
+            var it = list[j] || '';
+            var nm = (it && it.nama != null) ? String(it.nama).trim() : String(it).trim();
+            if (!nm) continue;
+            var sk = (it && it.sks != null) ? String(it.sks).trim() : '';
+            upsertMkSks_(mkSheet, nm, sk);
+        }
+        return { status: 'success', message: 'MK ' + cfg.semLabel + ' tersimpan' };
+    } finally {
+        try { lock.releaseLock(); } catch (e) { }
     }
 }
 
