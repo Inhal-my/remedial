@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Formulir Pendaftaran Remedial - F4 Trebuchet Final</title>
+  <style>
+    /* PENGATURAN KERTAS F4 (FOLIO) */
+    @page {
+      size: 215mm 330mm;
+      margin: 12mm;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Trebuchet MS', 'Lucida Grande', 'Lucida Sans Unicode', 'Lucida Sans', Tahoma, sans-serif;
+      color: #000;
+      background: #fff;
+      line-height: 1.4;
+    }
+
+    .page {
+      width: 100%;
+      max-width: 191mm;
+      margin: 0 auto;
+    }
+
+    /* HEADER STYLES */
+    .header-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    .header-table td {
+      vertical-align: middle;
+    }
+
+    .header-left,
+    .header-right {
+      width: 110px;
+    }
+
+    .header-center {
+      text-align: center;
+    }
+
+    .logo-left-img {
+      height: 75px;
+      width: auto;
+      display: block;
+      margin: 0;
+    }
+
+    .logo-right-img {
+      height: 75px;
+      width: auto;
+      display: block;
+      margin-left: auto;
+    }
+
+    .title .l1 {
+      font-weight: 900;
+      font-size: 15.5px;
+      line-height: 1.2;
+    }
+
+    .title .l2 {
+      font-weight: 900;
+      font-size: 14.5px;
+      line-height: 1.2;
+      margin-top: 2px;
+    }
+
+    .title .l3 {
+      font-weight: 900;
+      font-size: 14.5px;
+      line-height: 1.2;
+      margin-top: 2px;
+    }
+
+    .title .l4 {
+      font-weight: 900;
+      font-size: 13px;
+      line-height: 1.2;
+      margin-top: 6px;
+    }
+
+    /* SECTION STYLES */
+    .bar {
+      height: 24px;
+      background-color: #1f66c2;
+      margin-top: 15px;
+    }
+
+    .section-title {
+      font-weight: 900;
+      font-size: 12px;
+      text-align: center;
+      color: #fff;
+      line-height: 24px;
+      letter-spacing: 0.5px;
+    }
+
+    .block {
+      border: 1px solid #000;
+      margin-top: 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    /* INFO MAHASISWA - VERSI RAMPING (EDITED) */
+    .info td {
+      border: 1px solid #000;
+      padding: 1px 8px !important;
+      /* Spasi atas-bawah sangat minim */
+      font-size: 11.5px;
+      line-height: 1.0 !important;
+      /* Memaksa teks tidak punya ruang antar baris */
+      height: 20px;
+      /* Mengunci tinggi baris agar tetap tipis */
+    }
+
+    .info .label {
+      width: 145px;
+      font-weight: 900;
+      background-color: #f9fafb;
+    }
+
+    .info .value {
+      font-weight: 600;
+    }
+
+    /* Bagian Foto tetap dipertahankan proporsinya */
+    .info .photo {
+      width: 150px;
+      padding: 5px !important;
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    .photo-box {
+      width: 110px;
+      height: 135px;
+      border: 1px solid #000;
+      margin: 0 auto;
+      background: #f1f5f9;
+      overflow: hidden;
+    }
+
+    .photo-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .spacer {
+      height: 18px;
+    }
+
+    /* MATA KULIAH TABLE */
+    .mk th,
+    .mk td {
+      border: 1px solid #000;
+      padding: 6px 9px;
+      font-size: 11px;
+    }
+
+    .mk th {
+      background-color: #1f66c2;
+      color: #fff;
+      font-weight: 900;
+      text-align: center;
+      font-size: 11.5px;
+    }
+
+    .mk .col-name {
+      text-align: left;
+    }
+
+    .mk .col-sem {
+      width: 95px;
+      text-align: center;
+      font-weight: 900;
+    }
+
+    .mk .col-sks {
+      width: 65px;
+      text-align: center;
+      font-weight: 900;
+    }
+
+    .mk tfoot td {
+      font-weight: 900;
+      text-align: right;
+      font-size: 11.5px;
+      padding: 8px;
+    }
+
+    /* FOOTER / SIGNATURE (POSISI KANAN) */
+    .footer-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      margin-top: 30px;
+    }
+
+    .footer-table td {
+      vertical-align: top;
+    }
+
+    .footer-left {
+      width: 60%;
+      font-size: 10px;
+      color: #4b5563;
+      vertical-align: bottom !important;
+      padding-bottom: 5px;
+    }
+
+    .footer-right {
+      width: 40%;
+      text-align: center;
+      font-size: 11.5px;
+    }
+
+    .sign .date {
+      font-size: 11.5px;
+      margin-bottom: 5px;
+    }
+
+    .sign .approved {
+      font-size: 11.5px;
+      font-weight: 900;
+      margin-bottom: 5px;
+    }
+
+    .signature-box {
+      width: 100%;
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .signature-img {
+      width: 170px;
+      height: auto;
+      display: block;
+      margin: 0 auto;
+    }
+
+    .sign .role {
+      font-weight: 900;
+      font-size: 11.5px;
+      border-bottom: 1px solid #000;
+      display: inline-block;
+      min-width: 170px;
+      padding-bottom: 3px;
+      margin-bottom: 3px;
+    }
+
+    .sign .name {
+      font-size: 11.5px;
+      margin-top: 2px;
+      display: block;
+      font-weight: 600;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page">
+    <table class="header-table">
+      <tr>
+        <td class="header-left">
+          <img class="logo-left-img" src="{{LOGO_UMSU}}" alt="Logo UMSU">
+        </td>
+        <td class="header-center">
+          <div class="title">
+            <div class="l1">FORMULIR PENDAFTARAN REMEDIAL SEMESTER</div>
+            <div class="l2">FAKULTAS KEDOKTERAN DAN ILMU KESEHATAN UMSU</div>
+            <div class="l3">SEMESTER GENAP T.A 2025/2026</div>
+          </div>
+        </td>
+        <td class="header-right">
+          <img class="logo-right-img" src="{{LOGO_UNGGUL}}" alt="Logo UNGGUL">
+        </td>
+      </tr>
+    </table>
+
+    <div class="bar" style="background-color:#1f66c2;">
+      <div class="section-title" style="color:#fff;">INFO MAHASISWA</div>
+    </div>
+
+    <div class="block">
+      <table class="info">
+        <tr>
+          <td class="label">NAMA</td>
+          <td class="value">{{NAMA_LENGKAP}}</td>
+          <td class="photo" rowspan="4">
+            <div class="photo-box">
+              <img class="photo-img" src="{{PAS_FOTO_URL}}" alt="Pas Foto">
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td class="label">NPM</td>
+          <td class="value">{{NPM}}</td>
+        </tr>
+        <tr>
+          <td class="label">NO. HP / WA AKTIF</td>
+          <td class="value">{{NO_HP}}</td>
+        </tr>
+        <tr>
+          <td class="label">SEMESTER</td>
+          <td class="value">Crash Program</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="bar" style="background-color:#1f66c2;">
+      <div class="section-title" style="color:#fff;">INFO MATA KULIAH</div>
+    </div>
+
+    <div class="block">
+      <table class="mk">
+        <thead>
+          <tr>
+            <th class="col-name" style="background-color:#1f66c2;color:#fff;">Nama Mata Kuliah</th>
+            <th class="col-sem" style="background-color:#1f66c2;color:#fff;">Semester</th>
+            <th class="col-sks" style="background-color:#1f66c2;color:#fff;">SKS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{MK_TABLE_BODY}}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2">TOTAL SKS</td>
+            <td class="col-sks">{{TOTAL_SKS}}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <table class="footer-table">
+      <tr>
+        <td class="footer-left">
+          <i>{{TIMESTAMP_KIRIM}}</i>
+        </td>
+        <td class="footer-right">
+          <div class="sign">
+            <div class="date">Medan, {{TANGGAL_KIRIM_ID}}</div>
+            <div class="approved">Disetujui Oleh,</div>
+            <div class="signature-box">
+              <img class="signature-img" src="{{TTD_DR_DESI}}" alt="Tanda Tangan">
+            </div>
+            <div class="role">Ka. Prodi FKIK UMSU</div>
+            <div class="name">dr. Desi Isnayanti, M.Pd.Ked</div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+</body>
+
+</html>
