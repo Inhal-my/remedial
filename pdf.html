@@ -2,380 +2,169 @@
 <html lang="id">
 
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Formulir Pendaftaran Remedial - F4 Trebuchet Final</title>
-  <style>
-    /* PENGATURAN KERTAS F4 (FOLIO) */
-    @page {
-      size: 215mm 330mm;
-      margin: 12mm;
-    }
-
-    * {
-      box-sizing: border-box;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: 'Trebuchet MS', 'Lucida Grande', 'Lucida Sans Unicode', 'Lucida Sans', Tahoma, sans-serif;
-      color: #000;
-      background: #fff;
-      line-height: 1.4;
-    }
-
-    .page {
-      width: 100%;
-      max-width: 191mm;
-      margin: 0 auto;
-    }
-
-    /* HEADER STYLES */
-    .header-table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-    }
-
-    .header-table td {
-      vertical-align: middle;
-    }
-
-    .header-left,
-    .header-right {
-      width: 110px;
-    }
-
-    .header-center {
-      text-align: center;
-    }
-
-    .logo-left-img {
-      height: 75px;
-      width: auto;
-      display: block;
-      margin: 0;
-    }
-
-    .logo-right-img {
-      height: 75px;
-      width: auto;
-      display: block;
-      margin-left: auto;
-    }
-
-    .title .l1 {
-      font-weight: 900;
-      font-size: 15.5px;
-      line-height: 1.2;
-    }
-
-    .title .l2 {
-      font-weight: 900;
-      font-size: 14.5px;
-      line-height: 1.2;
-      margin-top: 2px;
-    }
-
-    .title .l3 {
-      font-weight: 900;
-      font-size: 14.5px;
-      line-height: 1.2;
-      margin-top: 2px;
-    }
-
-    .title .l4 {
-      font-weight: 900;
-      font-size: 13px;
-      line-height: 1.2;
-      margin-top: 6px;
-    }
-
-    /* SECTION STYLES */
-    .bar {
-      height: 24px;
-      background-color: #1f66c2;
-      margin-top: 15px;
-    }
-
-    .section-title {
-      font-weight: 900;
-      font-size: 12px;
-      text-align: center;
-      color: #fff;
-      line-height: 24px;
-      letter-spacing: 0.5px;
-    }
-
-    .block {
-      border: 1px solid #000;
-      margin-top: 0;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    /* INFO MAHASISWA - VERSI RAMPING (EDITED) */
-    .info td {
-      border: 1px solid #000;
-      padding: 1px 8px !important;
-      /* Spasi atas-bawah sangat minim */
-      font-size: 11.5px;
-      line-height: 1.0 !important;
-      /* Memaksa teks tidak punya ruang antar baris */
-      height: 20px;
-      /* Mengunci tinggi baris agar tetap tipis */
-    }
-
-    .info .label {
-      width: 145px;
-      font-weight: 900;
-      background-color: #f9fafb;
-    }
-
-    .info .value {
-      font-weight: 600;
-    }
-
-    /* Bagian Foto tetap dipertahankan proporsinya */
-    .info .photo {
-      width: 150px;
-      padding: 5px !important;
-      text-align: center;
-      vertical-align: middle;
-    }
-
-    .photo-box {
-      width: 110px;
-      height: 135px;
-      border: 1px solid #000;
-      margin: 0 auto;
-      background: #f1f5f9;
-      overflow: hidden;
-    }
-
-    .photo-img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-
-    .spacer {
-      height: 18px;
-    }
-
-    /* MATA KULIAH TABLE */
-    .mk th,
-    .mk td {
-      border: 1px solid #000;
-      padding: 6px 9px;
-      font-size: 11px;
-    }
-
-    .mk th {
-      background-color: #1f66c2;
-      color: #fff;
-      font-weight: 900;
-      text-align: center;
-      font-size: 11.5px;
-    }
-
-    .mk .col-name {
-      text-align: left;
-    }
-
-    .mk .col-sem {
-      width: 95px;
-      text-align: center;
-      font-weight: 900;
-    }
-
-    .mk .col-sks {
-      width: 65px;
-      text-align: center;
-      font-weight: 900;
-    }
-
-    .mk tfoot td {
-      font-weight: 900;
-      text-align: right;
-      font-size: 11.5px;
-      padding: 8px;
-    }
-
-    /* FOOTER / SIGNATURE (POSISI KANAN) */
-    .footer-table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-      margin-top: 30px;
-    }
-
-    .footer-table td {
-      vertical-align: top;
-    }
-
-    .footer-left {
-      width: 60%;
-      font-size: 10px;
-      color: #4b5563;
-      vertical-align: bottom !important;
-      padding-bottom: 5px;
-    }
-
-    .footer-right {
-      width: 40%;
-      text-align: center;
-      font-size: 11.5px;
-    }
-
-    .sign .date {
-      font-size: 11.5px;
-      margin-bottom: 5px;
-    }
-
-    .sign .approved {
-      font-size: 11.5px;
-      font-weight: 900;
-      margin-bottom: 5px;
-    }
-
-    .signature-box {
-      width: 100%;
-      height: 80px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .signature-img {
-      width: 170px;
-      height: auto;
-      display: block;
-      margin: 0 auto;
-    }
-
-    .sign .role {
-      font-weight: 900;
-      font-size: 11.5px;
-      border-bottom: 1px solid #000;
-      display: inline-block;
-      min-width: 170px;
-      padding-bottom: 3px;
-      margin-bottom: 3px;
-    }
-
-    .sign .name {
-      font-size: 11.5px;
-      margin-top: 2px;
-      display: block;
-      font-weight: 600;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>Formulir Pendaftaran Remedial - FKIK UMSU</title>
 </head>
 
-<body>
-  <div class="page">
-    <table class="header-table">
-      <tr>
-        <td class="header-left">
-          <img class="logo-left-img" src="{{LOGO_UMSU}}" alt="Logo UMSU">
-        </td>
-        <td class="header-center">
-          <div class="title">
-            <div class="l1">FORMULIR PENDAFTARAN REMEDIAL SEMESTER</div>
-            <div class="l2">FAKULTAS KEDOKTERAN DAN ILMU KESEHATAN UMSU</div>
-            <div class="l3">SEMESTER GENAP T.A 2025/2026</div>
-          </div>
-        </td>
-        <td class="header-right">
-          <img class="logo-right-img" src="{{LOGO_UNGGUL}}" alt="Logo UNGGUL">
-        </td>
-      </tr>
+<body
+    style="margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a1a;background:#fff;line-height:1.25;">
+
+    <!-- KOP SURAT -->
+    <table border="0" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;margin:0;">
+        <tr>
+            <td style="width:115px;padding:0 6px 0 0;vertical-align:middle;text-align:center;">
+                <img src="{{LOGO_SRC}}" alt="Logo UMSU"
+                    style="width:{{LOGO_W}}px;height:{{LOGO_H}}px;display:block;margin:0 auto;">
+            </td>
+            <td style="vertical-align:middle;text-align:center;padding:0 4px;">
+                <div
+                    style="font-family:Times New Roman,Times,Georgia,serif;font-size:13pt;font-weight:bold;color:#0f3d2e;line-height:1.15;">
+                    FAKULTAS KEDOKTERAN DAN ILMU KESEHATAN</div>
+                <div
+                    style="font-family:Times New Roman,Times,Georgia,serif;font-size:12.5pt;font-weight:bold;color:#0f3d2e;line-height:1.12;margin-top:1px;">
+                    UNIVERSITAS MUHAMMADIYAH SUMATERA UTARA</div>
+                <div
+                    style="font-family:Times New Roman,Times,Georgia,serif;font-size:10.5pt;font-weight:600;color:#2d2d2d;margin-top:3px;line-height:1.15;">
+                    Program Studi Pendidikan Dokter</div>
+                <div
+                    style="font-family:Arial,Helvetica,sans-serif;font-size:8.2pt;color:#5b6777;margin-top:3px;line-height:1.2;">
+                    Jl. Gedung Arca No. 53 Medan 20217 &middot; Telp. (061) 7362265 / 7362267<br>
+                    fk.umsu.ac.id &middot; fk@umsu.ac.id
+                </div>
+            </td>
+        </tr>
+    </table>
+    <img src="{{GREEN_LINE}}" alt="" style="width:100%;height:3.5px;display:block;margin-top:3px;">
+
+    <!-- JUDUL DOKUMEN -->
+    <div style="text-align:center;margin-top:5px;">
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;color:#1e293b;">Formulir
+            Pendaftaran Remedial</div>
+        <div
+            style="font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;color:#1e293b;margin-top:1px;">
+            Semester {{PERIODE}} T.A {{TAHUN_AJARAN}}</div>
+    </div>
+
+    <!-- SEKSI IDENTITAS -->
+    <div style="margin-top:7px;margin-bottom:4px;">
+        <table border="0" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;">
+            <tr>
+                <td style="width:4px;background:#003087;padding:0;">&nbsp;</td>
+                <td
+                    style="background:#f0f4ff;padding:3.5px 10px;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;font-weight:bold;color:#003087;letter-spacing:0.3px;">
+                    IDENTITAS MAHASISWA</td>
+            </tr>
+        </table>
+    </div>
+    <table style="width:100%;border-collapse:collapse;">
+        <tr>
+            <td
+                style="width:150px;border:1px solid #cbd5e1;padding:4.5px 8px;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:bold;color:#334155;vertical-align:middle;text-align:left;">
+                NAMA LENGKAP</td>
+            <td
+                style="border:1px solid #cbd5e1;padding:4.5px 8px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;color:#0f172a;vertical-align:middle;text-align:left;">
+                {{NAMA}}</td>
+            <td style="width:110px;border:1px solid #cbd5e1;padding:3px;text-align:center;vertical-align:middle;"
+                rowspan="4">
+                <div
+                    style="width:95px;height:115px;border:1px solid #94a3b8;margin:0 auto;background:#f1f5f9;overflow:hidden;text-align:center;">
+                    {{PAS_FOTO}}
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td
+                style="border:1px solid #cbd5e1;padding:4.5px 8px;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:bold;color:#334155;vertical-align:middle;text-align:left;">
+                NPM</td>
+            <td
+                style="border:1px solid #cbd5e1;padding:4.5px 8px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;color:#0f172a;vertical-align:middle;text-align:left;">
+                {{NPM}}</td>
+        </tr>
+        <tr>
+            <td
+                style="border:1px solid #cbd5e1;padding:4.5px 8px;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:bold;color:#334155;vertical-align:middle;text-align:left;">
+                NO. HP / WA AKTIF</td>
+            <td
+                style="border:1px solid #cbd5e1;padding:4.5px 8px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;color:#0f172a;vertical-align:middle;text-align:left;">
+                {{NO_HP}}</td>
+        </tr>
+        <tr>
+            <td
+                style="border:1px solid #cbd5e1;padding:4.5px 8px;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:bold;color:#334155;vertical-align:middle;text-align:left;">
+                SEMESTER</td>
+            <td
+                style="border:1px solid #cbd5e1;padding:4.5px 8px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;color:#0f172a;vertical-align:middle;text-align:left;">
+                {{SEMESTER}}</td>
+        </tr>
     </table>
 
-    <div class="bar" style="background-color:#1f66c2;">
-      <div class="section-title" style="color:#fff;">INFO MAHASISWA</div>
+    <!-- SEKSI MATA KULIAH -->
+    <div style="margin-top:7px;margin-bottom:4px;">
+        <table border="0" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;">
+            <tr>
+                <td style="width:4px;background:#003087;padding:0;">&nbsp;</td>
+                <td
+                    style="background:#f0f4ff;padding:3.5px 10px;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;font-weight:bold;color:#003087;letter-spacing:0.3px;">
+                    MATA KULIAH</td>
+            </tr>
+        </table>
     </div>
-
-    <div class="block">
-      <table class="info">
-        <tr>
-          <td class="label">NAMA</td>
-          <td class="value">{{NAMA_LENGKAP}}</td>
-          <td class="photo" rowspan="4">
-            <div class="photo-box">
-              <img class="photo-img" src="{{PAS_FOTO_URL}}" alt="Pas Foto">
-            </div>
-          </td>
-        </tr>
-        <tr>
-          <td class="label">NPM</td>
-          <td class="value">{{NPM}}</td>
-        </tr>
-        <tr>
-          <td class="label">NO. HP / WA AKTIF</td>
-          <td class="value">{{NO_HP}}</td>
-        </tr>
-        <tr>
-          <td class="label">SEMESTER</td>
-          <td class="value">Crash Program</td>
-        </tr>
-      </table>
-    </div>
-
-    <div class="spacer"></div>
-
-    <div class="bar" style="background-color:#1f66c2;">
-      <div class="section-title" style="color:#fff;">INFO MATA KULIAH</div>
-    </div>
-
-    <div class="block">
-      <table class="mk">
+    <table style="width:100%;border-collapse:collapse;">
         <thead>
-          <tr>
-            <th class="col-name" style="background-color:#1f66c2;color:#fff;">Nama Mata Kuliah</th>
-            <th class="col-sem" style="background-color:#1f66c2;color:#fff;">Semester</th>
-            <th class="col-sks" style="background-color:#1f66c2;color:#fff;">SKS</th>
-          </tr>
+            <tr>
+                <th
+                    style="background:#003087;color:#fff;border:1px solid #003087;padding:5px 6px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;font-weight:bold;width:34px;vertical-align:middle;">
+                    No</th>
+                <th
+                    style="background:#003087;color:#fff;border:1px solid #003087;padding:5px 8px;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;font-weight:bold;vertical-align:middle;">
+                    Nama Mata Kuliah</th>
+                <th
+                    style="background:#003087;color:#fff;border:1px solid #003087;padding:5px 6px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;font-weight:bold;width:75px;vertical-align:middle;">
+                    Semester</th>
+                <th
+                    style="background:#003087;color:#fff;border:1px solid #003087;padding:5px 6px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;font-weight:bold;width:45px;vertical-align:middle;">
+                    SKS</th>
+            </tr>
         </thead>
-        <tbody>
-          {{MK_TABLE_BODY}}
-        </tbody>
+        <tbody>{{MK_ROWS}}</tbody>
         <tfoot>
-          <tr>
-            <td colspan="2">TOTAL SKS</td>
-            <td class="col-sks">{{TOTAL_SKS}}</td>
-          </tr>
+            <tr>
+                <td colspan="3"
+                    style="background:#f0f4ff;border:1px solid #cbd5e1;padding:4.5px 8px;text-align:right;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;font-weight:bold;color:#003087;vertical-align:middle;">
+                    TOTAL SKS</td>
+                <td
+                    style="background:#f0f4ff;border:1px solid #cbd5e1;padding:4.5px 6px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;font-weight:bold;color:#003087;vertical-align:middle;">
+                    {{TOTAL_SKS}}</td>
+            </tr>
         </tfoot>
-      </table>
-    </div>
-
-    <table class="footer-table">
-      <tr>
-        <td class="footer-left">
-          <i>{{TIMESTAMP_KIRIM}}</i>
-        </td>
-        <td class="footer-right">
-          <div class="sign">
-            <div class="date">Medan, {{TANGGAL_KIRIM_ID}}</div>
-            <div class="approved">Disetujui Oleh,</div>
-            <div class="signature-box">
-              <img class="signature-img" src="{{TTD_DR_DESI}}" alt="Tanda Tangan">
-            </div>
-            <div class="role">Ka. Prodi FKIK UMSU</div>
-            <div class="name">dr. Desi Isnayanti, M.Pd.Ked</div>
-          </div>
-        </td>
-      </tr>
     </table>
-  </div>
+
+    <!-- TANDA TANGAN -->
+    <table border="0" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;margin-top:10px;">
+        <tr>
+            <td style="width:58%;vertical-align:bottom;padding:0;"></td>
+            <td style="text-align:center;vertical-align:top;padding:0 4px;">
+                <div style="font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#334155;font-weight:bold;">
+                    Medan, {{TANGGAL_MEDAN}}</div>
+                <div
+                    style="font-family:Arial,Helvetica,sans-serif;font-size:9.5px;color:#475569;margin-top:1px;font-weight:bold;">
+                    KA. PRODI FKIK UMSU</div>
+                <div style="height:48px;text-align:center;margin-top:2px;">
+                    {{TTD_IMG}}
+                </div>
+                <div
+                    style="display:inline-block;border-top:1.5px solid #1e293b;padding-top:2px;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;font-weight:bold;color:#1a1a1a;">
+                    dr. Desi Isnayanti, M.Pd.Ked</div>
+                <div style="font-family:Arial,Helvetica,sans-serif;font-size:9.5px;color:#64748b;margin-top:1px;">NIDN.
+                    0105038802</div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- FOOTER HALAMAN -->
+    <div style="margin-top:8px;font-family:Arial,Helvetica,sans-serif;font-size:7px;color:#64748b;">Diterbitkan:
+        {{TIMESTAMP}}</div>
+
 </body>
 
 </html>
