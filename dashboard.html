@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#1E40AF">
+    <title>Dashboard Rekapitulasi Remedial</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=Fira+Code:wght@500;600&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <style>
+        :root {
+            --primary: #1E40AF;
+            --primary-dark: #172F8E;
+            --secondary: #3B82F6;
+            --accent: #D97706;
+            --bg: #F8FAFC;
+            --foreground: #0F172A;
+            --heading: #1E3A8A;
+            --muted: #E9EEF6;
+            --border: #DBEAFE;
+            --destructive: #DC2626;
+            --success: #16A34A;
+            --warning: #B45309;
+            --info: #1E40AF;
+            --text-muted: #64748B;
+            --radius: 8px;
+            --shadow: 0 1px 2px rgba(15,23,42,0.05), 0 1px 3px rgba(15,23,42,0.06);
+            --header-h: 52px;
+            --sidebar-w: 224px;
+            --sidebar-bg: #0F1D44;
+            --on-primary: #FFFFFF;
+        }
+        html { -webkit-tap-highlight-color: transparent; }
+        body {
+            background: var(--bg); color: var(--foreground);
+            font-family: 'Fira Sans', system-ui, sans-serif;
+            font-size: 14px; line-height: 1.45;
+        }
+        h1, h2, h3, h4, .font-head { font-family: 'Fira Sans', sans-serif; color: var(--heading); }
+        .font-body { font-family: 'Fira Sans', system-ui, sans-serif; }
+        .num, .npm { font-family: 'Fira Code', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+        a { color: var(--primary); }
+
+        /* ===== Buttons ===== */
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            min-height: 44px; padding: 0 14px; border-radius: 6px; border: 1px solid var(--border);
+            background: #fff; color: var(--foreground); font-weight: 600; font-size: 13px; cursor: pointer;
+            position: relative; overflow: hidden;
+            transition: border-color .15s, color .15s, background .15s, transform .12s; }
+        .btn:hover { border-color: var(--primary); color: var(--primary); }
+        .btn:active { transform: scale(0.97); }
+        .btn::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 60%); }
+        .btn:active::after { opacity: 1; transition: opacity .12s; }
+        .btn-primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+        .btn-primary:hover { background: var(--primary-dark); color: #fff; }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-sm { min-height: 34px; padding: 0 10px; font-size: 12px; }
+        .btn-success { background: var(--success); border-color: var(--success); color: #fff; }
+        .btn-success:hover { background: #15803D; color: #fff; }
+        .btn-outline-danger { color: var(--destructive); border-color: #FCA5A5; }
+        .btn-outline-danger:hover { background: #FEF2F2; }
+        .btn-tap { display: inline-flex; align-items: center; justify-content: center;
+            min-height: 44px; padding: 0 0.4rem; margin: 0.15rem 0; cursor: pointer;
+            font-size: 0.8rem; font-weight: 600; text-decoration: underline;
+            transition: color .15s, transform .12s; }
+        .btn-tap:active { transform: scale(0.96); }
+        .icon-btn { background: none; border: none; color: var(--text-muted); padding: 8px; border-radius: 6px;
+            min-height: 44px; min-width: 44px; display: inline-flex; align-items: center;
+            justify-content: center; cursor: pointer;
+            transition: background .15s, color .15s, transform .12s; }
+        .icon-btn:hover { background: var(--muted); color: var(--primary); }
+        .icon-btn:active { transform: scale(0.94); }
+
+        /* ===== Layout ===== */
+        .layout { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; }
+
+        /* ===== Sidebar ===== */
+        .mark { width: 32px; height: 32px; border-radius: 8px; background: var(--primary);
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .sidebar { background: var(--sidebar-bg); color: #C7D2FE; display: flex; flex-direction: column;
+            position: sticky; top: 0; height: 100vh; z-index: 30; transition: transform .22s ease; }
+        .brand { display: flex; align-items: center; gap: 10px; padding: 14px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.08); min-height: var(--header-h); }
+        .brand h1 { color: #fff; font-size: 14px; font-weight: 700; line-height: 1.2; }
+        .brand p { color: #93A5D8; font-size: 11px; }
+        .nav { padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; flex: 1; overflow-y: auto; }
+        .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 6px;
+            color: #AEB9E3; font-size: 13px; font-weight: 500; text-decoration: none; min-height: 40px;
+            cursor: pointer; background: none; border: none; text-align: left; width: 100%;
+            position: relative; transition: background .15s, color .15s, transform .12s; }
+        .nav-item svg { flex-shrink: 0; }
+        .nav-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
+        .nav-item:active { transform: scale(0.97); }
+        .nav-item.active { background: var(--primary); color: #fff; }
+        .nav-item.active::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px;
+            border-radius: 999px; background: #93C5FD; animation: slideIn .18s ease-out; }
+        .nav-badge { margin-left: auto; background: var(--accent); color: #fff; font-size: 11px;
+            font-weight: 700; border-radius: 999px; padding: 1px 7px; }
+        .nav-badge.gray { background: rgba(255,255,255,0.18); }
+        .side-foot { padding: 12px 16px; border-top: 1px solid rgba(255,255,255,0.08);
+            display: flex; align-items: center; gap: 10px; }
+        .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--secondary); color: #fff;
+            display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; }
+        .side-foot .who { font-size: 12px; color: #E0E7FF; }
+        .side-foot .role { font-size: 11px; color: #93A5D8; }
+
+        /* ===== Main / topbar ===== */
+        .main { display: flex; flex-direction: column; min-width: 0; }
+        .topbar { background: #fff; border-bottom: 1px solid var(--border); padding: 0 16px;
+            height: var(--header-h); display: flex; align-items: center; gap: 12px;
+            position: sticky; top: 0; z-index: 20; animation: topbarIn .22s ease-out; }
+        .topbar .title { font-weight: 700; font-size: 15px; color: var(--heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .topbar .crumb { color: var(--text-muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .topbar .spacer { flex: 1; }
+        .pill { font-size: 11px; font-weight: 600; background: #EFF6FF; color: var(--primary);
+            border: 1px solid #BFDBFE; border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
+        .hamburger { display: none; }
+        .content { padding: 16px; max-width: 1280px; width: 100%; margin: 0 auto; }
+
+        /* ===== KPI ===== */
+        .kpi-grid { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 10px; margin-bottom: 16px; }
+        .kpi-grid.kpi-grid-4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
+        .kpi { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px;
+            box-shadow: var(--shadow); animation: fadeIn .3s ease-out both; }
+        .kpi:nth-child(1){animation-delay:.02s}.kpi:nth-child(2){animation-delay:.07s}
+        .kpi:nth-child(3){animation-delay:.12s}.kpi:nth-child(4){animation-delay:.17s}
+        .kpi:nth-child(5){animation-delay:.22s}.kpi:nth-child(6){animation-delay:.27s}
+        .kpi .k-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+        .kpi .k-label { font-size: 11px; color: var(--text-muted); font-weight: 600;
+            text-transform: uppercase; letter-spacing: .04em; }
+        .kpi .k-ic { width: 30px; height: 30px; border-radius: 6px; display: flex;
+            align-items: center; justify-content: center; flex-shrink: 0; }
+        .kpi .k-val { font-size: 26px; font-weight: 700; line-height: 1; color: var(--heading); }
+        .kpi .k-sub { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+        .kpi .k-sub .up { color: var(--success); font-weight: 700; }
+        .kpi .k-sub .warn { color: var(--warning); font-weight: 700; }
+
+        /* ===== Panel ===== */
+        .panel { background: #fff; border: 1px solid var(--border); border-radius: var(--radius);
+            box-shadow: var(--shadow); margin-bottom: 16px; }
+        .panel-head { padding: 10px 12px; border-bottom: 1px solid var(--muted);
+            display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .panel-head h3 { font-size: 13px; font-weight: 700; margin: 0; }
+        .panel-head .spacer { flex: 1; }
+        .panel-body { padding: 12px; }
+        .card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius);
+            box-shadow: var(--shadow); }
+
+        /* ===== Filters ===== */
+        .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .search { position: relative; flex: 1; min-width: 180px; }
+        .search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+        .search input { width: 100%; min-height: 40px; border: 1px solid var(--border); border-radius: 6px;
+            padding: 0 10px 0 32px; font-size: 13px; outline: none; background: var(--bg);
+            transition: border-color .15s, box-shadow .15s, background .15s; }
+        .search input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(30,64,175,.12); background: #fff; }
+        .sel { min-height: 40px; border: 1px solid var(--border); border-radius: 6px; padding: 0 10px;
+            font-size: 13px; background: var(--bg); color: var(--foreground); outline: none;
+            transition: border-color .15s, box-shadow .15s, background .15s; }
+        .sel:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(30,64,175,.12); background: #fff; }
+        .count-pill { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+
+        /* ===== Table ===== */
+        .table-wrap { overflow-x: auto; }
+        table.tbl { width: 100%; display: table; border-collapse: collapse; font-size: 13px; }
+        table.tbl th { background: var(--muted); color: #334155; text-align: left; font-size: 11px;
+            text-transform: uppercase; letter-spacing: .05em; padding: 8px 10px;
+            border-bottom: 1px solid var(--border); white-space: nowrap; }
+        table.tbl td { padding: 7px 10px; border-bottom: 1px solid #F1F5F9; vertical-align: middle; }
+        table.tbl tbody tr { transition: background .12s; }
+        table.tbl tbody tr:hover { background: #EFF6FF; }
+        table.tbl tr.row-click { cursor: pointer; }
+        table.tbl tr.detail-row:hover { background: #fff; }
+        table.tbl tr.detail-row > td { background: #F9FAFB; }
+        .npm { font-size: 12px; color: var(--primary); font-weight: 600; }
+        .sub { font-size: 11px; color: var(--text-muted); }
+        .row-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+        .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600;
+            border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+        .chip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+        .chip-acc { background: #DCFCE7; color: #15803D; }
+        .chip-reject { background: #FEE2E2; color: #B91C1C; }
+        .chip-pending { background: #FEF3C7; color: #B45309; }
+        .chip-pay { background: #DBEAFE; color: #1E40AF; }
+        .chip-nopay { background: #E2E8F0; color: #475569; }
+
+        /* ===== MK ===== */
+        .mk-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+        .mk-toolbar .sel { min-width: 220px; min-height: 34px; }
+        .mk-toolbar .spacer { flex: 1; }
+        .mk-select, .alasan-input { border: 1px solid var(--border); border-radius: 6px; padding: 0.3rem 0.5rem;
+            font-size: 12px; min-height: 34px; background: var(--bg); outline: none;
+            transition: border-color .15s, box-shadow .15s, background .15s; }
+        .mk-select:focus, .alasan-input:focus { border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(30,64,175,.12); background: #fff; }
+        .alasan-input { min-width: 180px; }
+
+        /* ===== Settings ===== */
+        .field { margin-bottom: 10px; }
+        .field label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 3px; }
+        .field input, .field select { width: 100%; min-height: 40px; border: 1px solid var(--border);
+            border-radius: 6px; padding: 0 10px; font-size: 13px; background: var(--bg);
+            color: var(--foreground); outline: none;
+            transition: border-color .15s, box-shadow .15s, background .15s; }
+        .field input:focus, .field select:focus { border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(30,64,175,.12); background: #fff; }
+
+        .empty { text-align: center; color: var(--text-muted); padding: 28px 0; font-size: 13px; }
+        .bar-track { background: #E2E8F0; border-radius: 999px; height: 7px; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 999px; transition: width .5s ease; }
+
+        /* ===== Page transition ===== */
+        .page { display: none; }
+        .page.active { display: block; animation: pageIn .24s ease-out; }
+        @keyframes pageIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+        @keyframes topbarIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+        @keyframes slideIn { from { opacity: 0; transform: scaleY(.4); } to { opacity: 1; transform: none; } }
+
+        /* ===== Bottom nav (mobile) ===== */
+        .bottom-nav { display: none; }
+
+        /* ===== Loading ===== */
+        #loadingOverlay { display: none; position: fixed; inset: 0; background: rgba(248,250,252,0.75);
+            z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+        #loadingOverlay.show { display: flex; }
+
+        /* ===== Slim inline loading (tab) ===== */
+        .slim-loading { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted);
+            padding: 8px 12px; margin-bottom: 10px; border-radius: 8px; background: #EFF6FF;
+            border: 1px solid var(--border); animation: fadeIn .18s ease-out; }
+        .spinner-mini { width: 14px; height: 14px; border-radius: 50%;
+            border: 2px solid rgba(30,64,175,.2); border-top-color: var(--primary);
+            animation: spin .7s linear infinite; flex-shrink: 0; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 900px) {
+            .layout { grid-template-columns: 1fr; }
+            .sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: var(--sidebar-w);
+                transform: translateX(-100%); box-shadow: 0 0 40px rgba(0,0,0,0.3); }
+            .sidebar.open { transform: translateX(0); }
+            .hamburger { display: inline-flex; }
+            .bottom-nav { display: flex; position: fixed; bottom: 0; left: 0; right: 0; background: #fff;
+                border-top: 1px solid var(--border); z-index: 40; animation: topbarIn .2s ease-out; }
+            .bn-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+                padding: 8px 2px 6px; color: var(--text-muted); font-size: 10px; font-weight: 600;
+                text-decoration: none; min-height: 52px; cursor: pointer; background: none; border: none;
+                border-top: 3px solid transparent; transition: color .15s, transform .12s; }
+            .bn-item.active { color: var(--primary); border-top-color: var(--primary); }
+            .bn-item:active { transform: scale(0.95); }
+            .bn-item .badge { background: var(--accent); color: #fff; font-size: 9px;
+                border-radius: 999px; padding: 0 5px; margin-left: 2px; }
+            body { padding-bottom: 60px; }
+            .topbar { padding: 0 12px; }
+            .topbar .crumb { display: none; }
+            .content { padding: 12px; }
+            .kpi-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+            .kpi-grid.kpi-grid-4 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+            table.tbl th { display: none; }
+            table.tbl, table.tbl tbody, table.tbl tr, table.tbl td { display: block; width: 100%; }
+            table.tbl tr { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: #fff; }
+            table.tbl td { border: none; padding: 6px 10px; display: flex;
+                justify-content: space-between; gap: 8px; align-items: center; text-align: right; }
+            table.tbl td::before { content: attr(data-label); font-weight: 700; color: var(--text-muted);
+                font-size: 11px; text-align: left; flex-shrink: 0; }
+            table.tbl td:first-child { font-weight: 700; justify-content: flex-start; }
+            table.tbl td:first-child::before { display: none; }
+            table.tbl td.detail-cell { display: block; text-align: left; }
+            table.tbl td.detail-cell::before { display: none; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            * { animation-duration: .01ms !important; animation-delay: 0s !important;
+                transition-duration: .01ms !important; }
+        }
+    </style>
+</head>
+<body class="font-body">
+<div id="app">
+    <!-- LOGIN -->
+    <div v-if="view === 'login'" class="min-h-screen flex items-center justify-center px-4"
+         style="background: linear-gradient(160deg, #0F1D44 0%, #1E40AF 55%, #3B82F6 130%);">
+        <div class="card w-full max-w-sm" style="padding:1.75rem;">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="mark" style="width:42px;height:42px;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h1"/><path d="M9 13h1"/><path d="M9 17h1"/><path d="M14 9h1"/><path d="M14 13h1"/><path d="M14 17h1"/></svg>
+                </div>
+                <div>
+                    <h2 class="font-head font-bold text-lg" style="color:var(--heading);">Dashboard Admin</h2>
+                    <p class="text-xs" style="color:var(--text-muted);">Rekapitulasi Remedial FKIK UMSU</p>
+                </div>
+            </div>
+            <div class="field mb-4">
+                <label for="loginPassword">Password Admin</label>
+                <input id="loginPassword" type="password" v-model="loginPassword"
+                       @keyup.enter="doLogin" placeholder="Masukkan password">
+            </div>
+            <button class="btn btn-primary w-full" :disabled="loading" @click="doLogin">Masuk</button>
+            <p class="text-xs mt-4 text-center" style="color:var(--text-muted);">Akses terbatas untuk admin FKIK UMSU</p>
+        </div>
+    </div>
+
+    <!-- MAIN -->
+    <div v-else class="min-h-screen">
+        <div class="layout">
+
+            <!-- Sidebar -->
+            <aside class="sidebar" :class="{ open: sidebarOpen }">
+                <div class="brand">
+                    <div class="mark">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h1"/><path d="M9 13h1"/><path d="M9 17h1"/><path d="M14 9h1"/><path d="M14 13h1"/><path d="M14 17h1"/></svg>
+                    </div>
+                    <div>
+                        <h1>Remedial FKIK</h1>
+                        <p>Admin Console</p>
+                    </div>
+                </div>
+                <nav class="nav">
+                    <button v-for="item in navItems" :key="item.key" class="nav-item"
+                            :class="{ active: tab === item.key }" @click="switchTab(item.key)">
+                        <span v-html="item.icon"></span>
+                        <span>{{ item.label }}</span>
+                        <span class="nav-badge" v-if="item.key === 'mk' && stats.menunggu">{{ stats.menunggu }}</span>
+                        <span class="nav-badge gray" v-else-if="item.key === 'pembayaran' && pendingBayar">{{ pendingBayar }}</span>
+                    </button>
+                    <div style="margin-top:auto;padding:8px 10px;border-top:1px solid rgba(255,255,255,0.08);">
+                        <p style="font-size:0.7rem;color:#93A5D8;">Sesi berakhir otomatis dalam 30 menit.</p>
+                    </div>
+                </nav>
+                <div class="side-foot">
+                    <div class="avatar">AD</div>
+                    <div>
+                        <div class="who">Admin Prodi</div>
+                        <div class="role">Admin FKIK</div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main -->
+            <div class="main">
+                <header class="topbar">
+                    <button class="icon-btn hamburger" @click="sidebarOpen = !sidebarOpen" aria-label="Buka menu">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                    <span class="title">{{ pageTitle }}</span>
+                    <span class="crumb">{{ periodeLabel }}</span>
+                    <span class="spacer"></span>
+                    <span class="pill">Mode: {{ uploadModeLabel }}</span>
+                    <button class="icon-btn" title="Muat ulang data tab ini" @click="refreshCurrentTab">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    </button>
+                    <button class="icon-btn" title="Keluar" @click="doLogout">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    </button>
+                </header>
+
+                <div class="content">
+
+                    <div v-if="state.busy" class="slim-loading"><span class="spinner-mini"></span>{{ state.busy }}</div>
+
+                    <!-- ============ REKAP ============ -->
+                    <section id="tab-rekap" class="page" :class="{ active: tab === 'rekap' }">
+                        <div class="panel">
+                            <div class="panel-head">
+                                <button @click="showGuide = !showGuide" class="w-full flex items-center justify-between"
+                                        style="background:none;border:none;cursor:pointer;padding:2px 0;">
+                                    <h3 style="color:var(--primary);">Panduan Alur Kerja Admin</h3>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                         :style="{ transform: showGuide ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }"><polyline points="6 9 12 15 18 9"/></svg>
+                                </button>
+                            </div>
+                            <div v-show="showGuide" class="panel-body grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                <div v-for="(g, i) in guideSteps" :key="i" class="rounded-lg p-3 flex gap-3" style="background:#f0f4ff;">
+                                    <div class="w-8 h-8 rounded-full flex items-center justify-center font-head font-bold text-white flex-shrink-0" style="background:var(--primary);">{{ i + 1 }}</div>
+                                    <div>
+                                        <p class="font-semibold text-sm">{{ g.title }}</p>
+                                        <p class="text-xs mt-0.5" style="color:var(--text-muted);">{{ g.desc }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- KPI -->
+                        <div class="kpi-grid">
+                            <div class="kpi"><div class="k-top"><span class="k-label">Total Pendaftar</span><span class="k-ic" style="background:#EFF6FF;color:var(--primary)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span></div><div class="k-val num">{{ stats.totalPendaftar }}</div><div class="k-sub">Total pendaftar</div></div>
+                            <div class="kpi"><div class="k-top"><span class="k-label">Menunggu</span><span class="k-ic" style="background:#FEF3C7;color:var(--warning)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span></div><div class="k-val num" style="color:var(--warning)">{{ stats.menunggu }}</div><div class="k-sub"><span class="warn">Perlu diputuskan</span></div></div>
+                            <div class="kpi"><div class="k-top"><span class="k-label">ACC</span><span class="k-ic" style="background:#DCFCE7;color:var(--success)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span></div><div class="k-val num" style="color:var(--success)">{{ stats.acc }}</div><div class="k-sub"><span class="up">{{ stats.totalPendaftar ? Math.round(stats.acc / stats.totalPendaftar * 100) : 0 }}%</span> acc</div></div>
+                            <div class="kpi"><div class="k-top"><span class="k-label">Tidak ACC</span><span class="k-ic" style="background:#FEE2E2;color:var(--destructive)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span></div><div class="k-val num" style="color:var(--destructive)">{{ stats.tidakAcc }}</div><div class="k-sub"><span class="warn">{{ stats.totalPendaftar ? Math.round(stats.tidakAcc / stats.totalPendaftar * 100) : 0 }}%</span> ditolak</div></div>
+                            <div class="kpi"><div class="k-top"><span class="k-label">Sudah Bayar</span><span class="k-ic" style="background:#DBEAFE;color:var(--info)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span></div><div class="k-val num">{{ stats.sudahBayar }}</div><div class="k-sub"><span class="up">{{ stats.totalPendaftar ? Math.round(stats.sudahBayar / stats.totalPendaftar * 100) : 0 }}%</span> dari total</div></div>
+                            <div class="kpi"><div class="k-top"><span class="k-label">Belum Bayar</span><span class="k-ic" style="background:#E2E8F0;color:var(--text-muted)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span></div><div class="k-val num">{{ stats.belumBayar }}</div><div class="k-sub"><span class="warn">{{ stats.totalPendaftar ? Math.round(stats.belumBayar / stats.totalPendaftar * 100) : 0 }}%</span> belum</div></div>
+                        </div>
+
+                        <!-- Progres email + visualisasi semester -->
+                        <div class="grid lg:grid-cols-2 gap-3 mb-4">
+                            <div class="panel">
+                                <div class="panel-head"><h3>Progres Email ACC</h3></div>
+                                <div class="panel-body space-y-2">
+                                    <div>
+                                        <div class="flex justify-between text-xs mb-1"><span class="font-semibold">Terkirim</span><span>{{ emailProgress.terkirim }} / {{ emailProgress.total }}</span></div>
+                                        <div class="bar-track"><div class="bar-fill" style="background:var(--success);" :style="{ width: emailProgress.total ? (emailProgress.terkirim / emailProgress.total * 100) + '%' : '0%' }"></div></div>
+                                    </div>
+                                    <div>
+                                        <div class="flex justify-between text-xs mb-1"><span class="font-semibold">Belum Terkirim (keputusan lengkap)</span><span>{{ emailProgress.belum }}</span></div>
+                                        <div class="bar-track"><div class="bar-fill" style="background:var(--warning);" :style="{ width: emailProgress.total ? (emailProgress.belum / emailProgress.total * 100) + '%' : '0%' }"></div></div>
+                                    </div>
+                                    <div>
+                                        <div class="flex justify-between text-xs mb-1"><span class="font-semibold">Menunggu semua MK diputuskan</span><span>{{ emailProgress.menunggu }}</span></div>
+                                        <div class="bar-track"><div class="bar-fill" style="background:#94a3b8;" :style="{ width: emailProgress.total ? (emailProgress.menunggu / emailProgress.total * 100) + '%' : '0%' }"></div></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="panel">
+                                <div class="panel-head"><h3>Pemilih per Semester</h3></div>
+                                <div class="panel-body space-y-2.5">
+                                    <div v-for="s in semesterStats" :key="s.sem" class="flex items-center gap-3">
+                                        <span class="text-xs font-semibold w-12 flex-shrink-0">{{ s.sem }}</span>
+                                        <div class="bar-track flex-1"><div class="bar-fill" style="background:var(--primary);" :style="{ width: (semesterMax ? s.count / semesterMax * 100 : 0) + '%' }"></div></div>
+                                        <span class="text-xs w-8 text-right" style="color:var(--text-muted);">{{ s.count }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Filter -->
+                        <div class="panel">
+                            <div class="panel-head"><h3>Filter</h3><span class="spacer"></span><span class="count-pill">Menampilkan <b class="num">{{ filteredStudents.length }}</b> dari <b class="num">{{ state.students.length }}</b></span></div>
+                            <div class="panel-body">
+                                <div class="filters">
+                                    <div class="search">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                        <input v-model="filters.search" type="text" placeholder="Cari NPM / nama...">
+                                    </div>
+                                    <select class="sel" v-model="filters.angkatan"><option value="">Angkatan: Semua</option><option v-for="a in angkatanOptions" :key="a" :value="a">{{ a }}</option></select>
+                                    <select class="sel" v-model="filters.semester"><option value="">Semester: Semua</option><option value="Sem1">Sem1</option><option value="Sem2">Sem2</option><option value="Sem3">Sem3</option><option value="Sem4">Sem4</option><option value="Sem5">Sem5</option><option value="Sem6">Sem6</option><option value="Sem7">Sem7</option></select>
+                                    <select class="sel" v-model="filters.mk"><option value="">MK: Semua</option><option v-for="m in mkNames" :key="m" :value="m">{{ m }}</option></select>
+                                    <select class="sel" v-model="filters.status"><option value="">Status: Semua</option><option value="ACC">ACC</option><option value="Tidak ACC">Tidak ACC</option><option value="Menunggu">Menunggu</option></select>
+                                    <select class="sel" v-model="filters.bayar"><option value="">Bayar: Semua</option><option value="sudah">Sudah</option><option value="belum">Belum</option></select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tabel Rekap -->
+                        <div class="panel">
+                            <div class="panel-head">
+                                <h3>Daftar Mahasiswa</h3>
+                                <span class="spacer"></span>
+                                <span class="count-pill">Total: <b class="num">{{ state.students.length }}</b></span>
+                            </div>
+                            <div class="panel-body">
+                                <p v-if="filteredStudents.length === 0" class="empty">Tidak ada data yang cocok.</p>
+                                <div class="table-wrap" v-else>
+                                    <table class="tbl">
+                                        <thead>
+                                            <tr>
+                                                <th></th><th>NPM</th><th>Nama</th><th>Angkatan</th><th>Semester</th>
+                                                <th>Mata Kuliah</th><th>Status</th><th>Status Email</th><th>Pembayaran</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template v-for="s in filteredStudents" :key="s.npm">
+                                                <tr class="row-click" @click="toggleRow(s.npm)">
+                                                    <td data-label="">
+                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#9ca3af;" :style="{ transform: openRows[s.npm] ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }"><polyline points="6 9 12 15 18 9"/></svg>
+                                                    </td>
+                                                    <td data-label="NPM"><span class="npm">{{ s.npm }}</span></td>
+                                                    <td data-label="Nama"><b>{{ s.nama }}</b><br><span class="sub">{{ (s.mks || []).length }} MK</span></td>
+                                                    <td data-label="Angkatan">{{ s.angkatan }}</td>
+                                                    <td data-label="Semester">{{ (s.semesters || []).join(', ') }}</td>
+                                                    <td data-label="Mata Kuliah">{{ (s.mks || []).map(m => m.name).join(', ') }}</td>
+                                                    <td data-label="Status"><span v-html="chipOf(s.overall)"></span></td>
+                                                    <td data-label="Status Email"><span v-html="emailChip(s)"></span></td>
+                                                    <td data-label="Pembayaran"><span v-html="s.bayar ? payChip('Sudah') : payChip('Belum')"></span></td>
+                                                </tr>
+                                                <tr v-if="openRows[s.npm]" class="detail-row">
+                                                    <td colspan="9" class="detail-cell">
+                                                        <div v-html="studentDetailHtml(s)"></div>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ============ PERIKSA MK ============ -->
+                    <section id="tab-mk" class="page" :class="{ active: tab === 'mk' }">
+                        <div class="panel">
+                            <div class="panel-head">
+                                <h3>Pemeriksaan Matakuliah</h3>
+                                <span class="spacer"></span>
+                                <span class="count-pill">Pilih MK untuk melihat daftar mahasiswa</span>
+                            </div>
+                            <div class="panel-body">
+                                <div class="mk-toolbar">
+                                    <select class="sel" v-model="mkSelected" @change="loadMkReview">
+                                        <option value="">-- Pilih Mata Kuliah --</option>
+                                        <optgroup v-for="grp in mkGroups" :key="grp.sem" :label="grp.sem">
+                                            <option v-for="o in grp.items" :key="o" :value="o">{{ o }}</option>
+                                        </optgroup>
+                                    </select>
+                                    <span class="pill">Dipilih: <b>{{ mkSelected || '-' }}</b></span>
+                                    <span class="spacer"></span>
+                                    <select class="sel" v-model="mkStatusFilter" style="min-width:160px;">
+                                        <option value="">Status: Semua</option>
+                                        <option value="ACC">ACC</option>
+                                        <option value="Tidak ACC">Tidak ACC</option>
+                                        <option value="Belum">Belum Diputuskan</option>
+                                    </select>
+                                </div>
+
+                                <div class="kpi-grid kpi-grid-4">
+                                    <div class="kpi"><div class="k-top"><span class="k-label">Total Pemilih</span><span class="k-ic" style="background:#EFF6FF;color:var(--primary)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span></div><div class="k-val num">{{ mkReview ? mkReview.summary.total : 0 }}</div><div class="k-sub">Mahasiswa memilih MK ini</div></div>
+                                    <div class="kpi"><div class="k-top"><span class="k-label">Belum Diputuskan</span><span class="k-ic" style="background:#FEF3C7;color:var(--warning)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span></div><div class="k-val num" style="color:var(--warning)">{{ mkReview ? mkReview.summary.belum : 0 }}</div><div class="k-sub"><span class="warn">Perlu diputuskan</span></div></div>
+                                    <div class="kpi"><div class="k-top"><span class="k-label">ACC</span><span class="k-ic" style="background:#DCFCE7;color:var(--success)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span></div><div class="k-val num" style="color:var(--success)">{{ mkReview ? mkReview.summary.acc : 0 }}</div><div class="k-sub">Diterima</div></div>
+                                    <div class="kpi"><div class="k-top"><span class="k-label">Tidak ACC</span><span class="k-ic" style="background:#FEE2E2;color:var(--destructive)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span></div><div class="k-val num" style="color:var(--destructive)">{{ mkReview ? mkReview.summary.tidakAcc : 0 }}</div><div class="k-sub">Ditolak</div></div>
+                                </div>
+
+                                <p v-if="!mkReview || mkReview.students.length === 0" class="empty">Pilih mata kuliah untuk melihat daftar mahasiswa.</p>
+                                <p v-else-if="mkFilteredStudents.length === 0" class="empty">Tidak ada mahasiswa dengan status filter tersebut.</p>
+                                <div class="table-wrap" v-else>
+                                    <table class="tbl">
+                                        <thead><tr><th>NPM</th><th>Nama</th><th>Angkatan</th><th>Semester</th><th>Status MK</th><th>Keputusan &amp; Alasan</th></tr></thead>
+                                        <tbody>
+                                            <tr v-for="s in mkFilteredStudents" :key="s.npm">
+                                                <td data-label="NPM"><span class="npm">{{ s.npm }}</span></td>
+                                                <td data-label="Nama"><b>{{ s.nama }}</b></td>
+                                                <td data-label="Angkatan">{{ s.angkatan }}</td>
+                                                <td data-label="Semester">{{ s.semester }}</td>
+                                                <td data-label="Status MK"><span v-html="chipOf(s.status)"></span></td>
+                                                <td data-label="Keputusan &amp; Alasan">
+                                                    <div class="row-actions">
+                                                        <select class="mk-select" data-mk-select="1">
+                                                            <option value="">-- Pilih --</option>
+                                                            <option value="ACC" :selected="s.status === 'ACC'">ACC</option>
+                                                            <option value="Tidak ACC" :selected="s.status === 'Tidak ACC'">Tidak ACC</option>
+                                                        </select>
+                                                        <input class="alasan-input" :class="{ hidden: s.status !== 'Tidak ACC' }" placeholder="Alasan (wajib jika Tidak ACC)" :value="s.alasan || ''">
+                                                        <button class="btn btn-primary btn-sm" data-action="saveMkReview" :data-npm="s.npm">Simpan</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ============ PEMBAYARAN ============ -->
+                    <section id="tab-pembayaran" class="page" :class="{ active: tab === 'pembayaran' }">
+                        <div class="panel">
+                            <div class="panel-head">
+                                <h3>Verifikasi Bukti Pembayaran</h3>
+                                <span class="spacer"></span>
+                                <span class="count-pill"><b class="num">{{ pendingBayar }}</b> belum diverifikasi</span>
+                            </div>
+                            <div class="panel-body">
+                                <p v-if="pembayaran.length === 0" class="empty">Belum ada data pembayaran.</p>
+                                <div class="table-wrap" v-else>
+                                    <table class="tbl">
+                                        <thead><tr><th>Timestamp</th><th>NPM</th><th>Nama</th><th>Total SKS</th><th>Status Verifikasi</th><th>Link Bukti PDF</th><th>Aksi</th></tr></thead>
+                                        <tbody>
+                                            <tr v-for="r in pembayaran" :key="r.npm">
+                                                <td data-label="Timestamp">{{ r.timestamp }}</td>
+                                                <td data-label="NPM"><span class="npm">{{ r.npm }}</span></td>
+                                                <td data-label="Nama">{{ r.nama }}</td>
+                                                <td data-label="Total SKS" class="num">{{ r.totalSks }}</td>
+                                                <td data-label="Status Verifikasi">
+                                                    <span :class="r.statusVerifikasi === 'Sudah Diverifikasi' ? 'chip chip-acc' : 'chip chip-pending'"><span class="dot"></span>{{ r.statusVerifikasi }}</span>
+                                                </td>
+                                                <td data-label="Link Bukti PDF">
+                                                    <a v-if="r.buktiPembayaranUrl" :href="r.buktiPembayaranUrl" target="_blank" style="word-break:break-all;font-size:0.72rem;">{{ r.buktiPembayaranUrl }}</a>
+                                                    <span v-else>-</span>
+                                                </td>
+                                                <td data-label="Aksi">
+                                                    <div class="row-actions">
+                                                        <button v-if="r.buktiPembayaranUrl" @click="previewBukti(r.buktiPembayaranUrl)" class="btn-tap" style="color:var(--primary);">Preview</button>
+                                                        <button v-if="r.buktiPembayaranUrl" @click="openUrl(r.buktiPembayaranUrl)" class="btn-tap" style="color:var(--primary);">Lihat Bukti</button>
+                                                        <button v-if="r.buktiPembayaranUrl" @click="autoCek(r.npm)" class="btn-tap" style="color:#3730a3;">Auto Cek</button>
+                                                        <button v-if="r.statusVerifikasi !== 'Sudah Diverifikasi'" @click="verifyBayar(r.npm)" class="btn btn-success btn-sm">Tandai Terverifikasi</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ============ IZIN ============ -->
+                    <section id="tab-izin" class="page" :class="{ active: tab === 'izin' }">
+                        <div class="panel">
+                            <div class="panel-head"><h3>Izinkan Mahasiswa Daftar Ulang</h3></div>
+                            <div class="panel-body">
+                                <p class="text-sm mb-3" style="color:var(--text-muted);">Berikan izin agar mahasiswa dapat mengisi kembali formulir pendaftaran. Berlaku berulang sampai dicabut.</p>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                    <div class="field"><label>NPM</label><input v-model="izinNpm" type="text" placeholder="Contoh: 200601..."></div>
+                                    <div class="field"><label>Nama (opsional)</label><input v-model="izinNama" type="text" placeholder="Nama mahasiswa"></div>
+                                </div>
+                                <button class="btn btn-primary mt-3" @click="grantIzin">Izinkan Daftar Ulang</button>
+                            </div>
+                        </div>
+
+                        <div class="panel">
+                            <div class="panel-head"><h3>Daftar Izin Aktif</h3></div>
+                            <div class="panel-body">
+                                <p v-if="izin.length === 0" class="empty">Belum ada izin aktif.</p>
+                                <div class="table-wrap" v-else>
+                                    <table class="tbl">
+                                        <thead><tr><th>NPM</th><th>Nama</th><th>Status</th><th>Aksi</th></tr></thead>
+                                        <tbody>
+                                            <tr v-for="r in izin" :key="r.npm">
+                                                <td data-label="NPM"><span class="npm">{{ r.npm }}</span></td>
+                                                <td data-label="Nama">{{ r.nama }}</td>
+                                                <td data-label="Status"><span :class="r.statusClass"><span class="dot"></span>{{ r.statusLabel }}</span></td>
+                                                <td data-label="Aksi"><button @click="revokeIzin(r.npm)" class="btn btn-sm btn-outline-danger">Cabut Izin</button></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ============ PENGATURAN ============ -->
+                    <section id="tab-pengaturan" class="page" :class="{ active: tab === 'pengaturan' }">
+                        <div class="panel">
+                            <div class="panel-head"><h3>Periode Aktif</h3></div>
+                            <div class="panel-body">
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                                    <div class="field">
+                                        <label>Periode Semester</label>
+                                        <select v-model="setForm.periode">
+                                            <option value="ganjil">Ganjil (Sem 1, 3, 5, 7)</option>
+                                            <option value="genap">Genap (Sem 2, 4, 6, 8)</option>
+                                        </select>
+                                    </div>
+                                    <div class="field">
+                                        <label>Tahun Ajaran</label>
+                                        <input v-model="setForm.tahunAjaran" type="text" placeholder="Contoh: 2026/2027">
+                                    </div>
+                                    <div>
+                                        <button class="btn btn-primary" @click="savePeriode" :disabled="loading">Simpan Periode</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="panel">
+                            <div class="panel-head"><h3>Jadwal Buka / Tutup Formulir</h3></div>
+                            <div class="panel-body">
+                                <div class="grid md:grid-cols-2 gap-4">
+                                    <div class="rounded-lg p-4" style="background:#f8fafc;border:1px solid #e2e8f0;">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <p class="font-semibold text-sm">Pendaftaran (index.html)</p>
+                                            <span class="chip" :class="jadwalBadge(jadwalForm.pendaftaran.status)"><span class="dot"></span>{{ jadwalLabel(jadwalForm.pendaftaran.status) }}</span>
+                                        </div>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-3">
+                                            <div class="field"><label>Buka</label><input type="datetime-local" v-model="jadwalForm.pendaftaran.bukaLocal"></div>
+                                            <div class="field"><label>Tutup</label><input type="datetime-local" v-model="jadwalForm.pendaftaran.tutupLocal"></div>
+                                        </div>
+                                        <button class="btn btn-primary w-full" @click="saveJadwal('pendaftaran')" :disabled="loading">Simpan Jadwal Pendaftaran</button>
+                                    </div>
+                                    <div class="rounded-lg p-4" style="background:#f8fafc;border:1px solid #e2e8f0;">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <p class="font-semibold text-sm">Upload Bukti Bayar (upload.html)</p>
+                                            <span class="chip" :class="jadwalBadge(jadwalForm.upload.status)"><span class="dot"></span>{{ jadwalLabel(jadwalForm.upload.status) }}</span>
+                                        </div>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-3">
+                                            <div class="field"><label>Buka</label><input type="datetime-local" v-model="jadwalForm.upload.bukaLocal"></div>
+                                            <div class="field"><label>Tutup</label><input type="datetime-local" v-model="jadwalForm.upload.tutupLocal"></div>
+                                        </div>
+                                        <button class="btn btn-primary w-full" @click="saveJadwal('upload')" :disabled="loading">Simpan Jadwal Upload</button>
+                                    </div>
+                                </div>
+                                <p class="text-xs mt-2" style="color:var(--text-muted);">Kosongkan kolom untuk membuka tanpa batas waktu. Format simpan: dd/MM/yyyy HH:mm (WIB).</p>
+                            </div>
+                        </div>
+
+                        <div class="panel">
+                            <div class="panel-head"><h3>Mode Validasi Upload Bukti Bayar</h3></div>
+                            <div class="panel-body">
+                                <div class="space-y-2">
+                                    <label class="flex items-start gap-3 rounded-lg p-3 cursor-pointer" :style="setForm.uploadMode === 'default' ? 'background:#f0f4ff;border:1px solid #1E40AF;' : ''">
+                                        <input type="radio" value="default" v-model="setForm.uploadMode" class="mt-1">
+                                        <div><p class="font-semibold text-sm">Default (Strict)</p><p class="text-xs" style="color:var(--text-muted);">NPM pada PDF bukti pembayaran wajib cocok dengan NPM pengisi.</p></div>
+                                    </label>
+                                    <label class="flex items-start gap-3 rounded-lg p-3 cursor-pointer" :style="setForm.uploadMode === 'bypass' ? 'background:#f0f4ff;border:1px solid #1E40AF;' : ''">
+                                        <input type="radio" value="bypass" v-model="setForm.uploadMode" class="mt-1">
+                                        <div><p class="font-semibold text-sm">Bypass</p><p class="text-xs" style="color:var(--text-muted);">Lewati validasi NPM PDF (cadangan saat portal bermasalah).</p></div>
+                                    </label>
+                                </div>
+                                <button class="btn btn-primary mt-3" @click="saveUploadMode" :disabled="loading">Simpan Mode Upload</button>
+                            </div>
+                        </div>
+
+                        <div class="panel">
+                            <div class="panel-head"><h3>Surat PDF (Lampiran Email ACC)</h3></div>
+                            <div class="panel-body">
+                                <div class="grid md:grid-cols-2 gap-4">
+                                    <div class="field">
+                                        <label>URL Logo (Drive)</label>
+                                        <input v-model="setForm.pdfLogoUrl" type="url" placeholder="https://drive.google.com/file/d/..." style="font-size:0.8rem;">
+                                        <p class="text-xs mt-1" style="color:var(--text-muted);">File harus berbagi (Anyone with the link). Kosongkan untuk memakai logo bawaan.</p>
+                                    </div>
+                                    <div class="field">
+                                        <label>URL Tanda Tangan Ka. Prodi (Drive)</label>
+                                        <input v-model="setForm.pdfTtdUrl" type="url" placeholder="https://drive.google.com/file/d/..." style="font-size:0.8rem;">
+                                        <p class="text-xs mt-1" style="color:var(--text-muted);">Gambar PNG transparan. Jika kosong, area TTD dibiarkan blank.</p>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary mt-3" @click="savePdfAssets" :disabled="loading">Simpan Aset PDF</button>
+                            </div>
+                        </div>
+
+                        <div class="panel">
+                            <div class="panel-head">
+                                <h3>Mata Kuliah per Semester</h3>
+                                <span class="spacer"></span>
+                                <div class="flex items-center gap-1 rounded-lg p-1" style="background:#eef2ff;">
+                                    <button class="px-3 py-1.5 rounded-md text-sm font-semibold" :style="mkForm.set === 'ganjil' ? 'background:#1E40AF;color:#fff;' : 'color:#3730a3;'" @click="switchMkSet('ganjil')">Ganjil</button>
+                                    <button class="px-3 py-1.5 rounded-md text-sm font-semibold" :style="mkForm.set === 'genap' ? 'background:#1E40AF;color:#fff;' : 'color:#3730a3;'" @click="switchMkSet('genap')">Genap</button>
+                                </div>
+                            </div>
+                            <div class="panel-body">
+                                <div class="grid sm:grid-cols-2 gap-4">
+                                    <div v-for="sem in mkSemesters" :key="sem" class="rounded-lg p-3" style="background:#f8fafc;border:1px solid #e2e8f0;">
+                                        <p class="font-semibold text-sm mb-2">{{ sem }}</p>
+                                        <div v-for="(item, i) in mkSlots(sem)" :key="i" class="flex items-center gap-2 mb-1.5">
+                                            <span class="text-xs w-6 flex-shrink-0" style="color:var(--text-muted);">{{ i + 1 }}</span>
+                                            <input class="flex-1" style="border:1px solid #d1d5db;border-radius:0.5rem;padding:0.45rem 0.6rem;font-size:0.82rem;min-height:40px;" placeholder="Nama MK" v-model="item.nama">
+                                            <input class="w-16" style="border:1px solid #d1d5db;border-radius:0.5rem;padding:0.45rem 0.6rem;font-size:0.82rem;min-height:40px;text-align:center;" placeholder="SKS" v-model="item.sks">
+                                        </div>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary mt-3" @click="saveMkSet" :disabled="loading">Simpan Set {{ mkForm.set === 'ganjil' ? 'Ganjil' : 'Genap' }}</button>
+                            </div>
+                        </div>
+                    </section>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom nav (mobile) -->
+        <nav class="bottom-nav">
+            <button v-for="item in navItems" :key="item.key" class="bn-item"
+                    :class="{ active: tab === item.key }" @click="switchTab(item.key)">
+                <span v-html="item.icon"></span>
+                <span>{{ item.short }}</span>
+            </button>
+        </nav>
+    </div>
+</div>
+
+<div id="loadingOverlay">
+    <div class="w-10 h-10 border-4 border-gray-200 border-t-primary rounded-full animate-spin" style="border-top-color:var(--primary);"></div>
+</div>
+
+<script>
+    const { createApp, reactive, computed } = Vue;
+
+    const ICONS = {
+        rekap: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
+        mk: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>',
+        pembayaran: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>',
+        izin: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+        pengaturan: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'
+    };
+
+    const navItems = [
+        { key: 'rekap', label: 'Rekap', short: 'Rekap', icon: ICONS.rekap },
+        { key: 'mk', label: 'Pemeriksaan MK', short: 'MK', icon: ICONS.mk },
+        { key: 'pembayaran', label: 'Pembayaran', short: 'Bayar', icon: ICONS.pembayaran },
+        { key: 'izin', label: 'Izin Daftar Ulang', short: 'Izin', icon: ICONS.izin },
+        { key: 'pengaturan', label: 'Pengaturan', short: 'Atur', icon: ICONS.pengaturan }
+    ];
+
+    const state = reactive({
+        view: 'login',
+        token: '',
+        loginPassword: '',
+        tab: 'rekap',
+        loading: false,
+        busy: '',
+        stats: { totalPendaftar: 0, menunggu: 0, acc: 0, tidakAcc: 0, sudahBayar: 0, belumBayar: 0 },
+        students: [],
+        emailProgress: { total: 0, terkirim: 0, belum: 0, menunggu: 0 },
+        semesterStats: [],
+        mkOptions: [],
+        mkReview: null,
+        mkSelected: '',
+        mkStatusFilter: '',
+        izinNpm: '',
+        izinNama: '',
+        pembayaran: [],
+        izin: [],
+        settings: null,
+        settingsMk: null,
+        setForm: { periode: 'ganjil', tahunAjaran: '', uploadMode: 'default', pdfLogoUrl: '', pdfTtdUrl: '' },
+        jadwalForm: { pendaftaran: { bukaLocal: '', tutupLocal: '', status: 'open' }, upload: { bukaLocal: '', tutupLocal: '', status: 'open' } },
+        mkForm: { set: 'ganjil', slots: {} },
+        filters: { search: '', angkatan: '', semester: '', mk: '', status: '', bayar: '' }
+    });
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function server(fnName, params) {
+        return new Promise(function (resolve, reject) {
+            var run = google.script.run;
+            var call = run.withSuccessHandler(function (res) { resolve(res); })
+                .withFailureHandler(function (err) {
+                    var msg = (err && err.message) ? err.message : String(err);
+                    if (msg.indexOf('Sesi') !== -1) { forceLogout(msg); }
+                    reject(msg);
+                });
+            call[fnName].apply(call, [state.token].concat(params || []));
+        });
+    }
+
+    function setLoading(on) {
+        state.loading = !!on;
+        var el = document.getElementById('loadingOverlay');
+        if (el) el.classList.toggle('show', !!on);
+    }
+
+    function forceLogout(msg) {
+        state.view = 'login';
+        state.token = '';
+        sessionStorage.removeItem('dashToken');
+        Swal.fire({ icon: 'info', title: 'Sesi berakhir', text: msg || 'Silakan masuk kembali.' });
+    }
+
+    const app = createApp({
+        setup() {
+            const loginPassword = computed({ get: () => state.loginPassword, set: v => state.loginPassword = v });
+            const periodeLabel = computed(() => {
+                if (!state.settings) return '';
+                const ta = state.settings.tahunAjaran ? ' ' + state.settings.tahunAjaran : '';
+                return state.settings.periode === 'genap' ? 'Genap' + ta : 'Ganjil' + ta;
+            });
+            const openRows = reactive({});
+            const showGuide = Vue.ref(true);
+            const guideSteps = [
+                { title: 'Periksa MK', desc: 'Cek pilihan MK mahasiswa di tab Rekap atau Pemeriksaan MK.' },
+                { title: 'Putuskan', desc: 'Tandai ACC / Tidak ACC (wajib alasan).' },
+                { title: 'Email otomatis', desc: 'Setelah semua MK diputuskan, email + PDF terkirim sekali.' },
+                { title: 'Verifikasi bayar', desc: 'Cek bukti bayar di tab Pembayaran, tandai terverifikasi.' }
+            ];
+            const filteredStudents = Vue.computed(() => {
+                const f = state.filters;
+                return state.students.filter(s => {
+                    const q = f.search.trim().toLowerCase();
+                    if (q && String(s.npm).toLowerCase().indexOf(q) === -1 && String(s.nama).toLowerCase().indexOf(q) === -1) return false;
+                    if (f.angkatan && s.angkatan !== f.angkatan) return false;
+                    if (f.semester && !(s.semesters || []).includes(f.semester)) return false;
+                    if (f.status && s.overall !== f.status) return false;
+                    if (f.mk && !(s.mks || []).some(m => m.name === f.mk)) return false;
+                    if (f.bayar === 'sudah' && !s.bayar) return false;
+                    if (f.bayar === 'belum' && s.bayar) return false;
+                    return true;
+                });
+            });
+            const angkatanOptions = Vue.computed(() => {
+                const set = new Set();
+                state.students.forEach(s => set.add(s.angkatan));
+                return Array.from(set).filter(Boolean).sort();
+            });
+            const mkNames = Vue.computed(() => {
+                const set = new Set();
+                state.students.forEach(s => (s.mks || []).forEach(m => set.add(m.name)));
+                return Array.from(set).filter(Boolean).sort();
+            });
+            const semesterMax = Vue.computed(() => Math.max(1, ...state.semesterStats.map(s => s.count)));
+            const stats = Vue.computed(() => state.stats);
+            const emailProgress = Vue.computed(() => state.emailProgress);
+            const semesterStats = Vue.computed(() => state.semesterStats);
+            const mkGroups = Vue.computed(() => {
+                const map = {};
+                (state.mkOptions || []).forEach(o => { (map[o.semester] = map[o.semester] || []).push(o.name); });
+                return Object.keys(map).map(sem => ({ sem, items: map[sem] }));
+            });
+            const mkSemesters = Vue.computed(() => state.mkForm.set === 'ganjil' ? ['Sem1', 'Sem3', 'Sem5', 'Sem7'] : ['Sem2', 'Sem4', 'Sem6', 'Sem8']);
+            const mkReview = Vue.computed(() => state.mkReview);
+            const mkFilteredStudents = Vue.computed(() => {
+                const list = (state.mkReview && state.mkReview.students) || [];
+                if (!state.mkStatusFilter) return list;
+                return list.filter(s => s.status === state.mkStatusFilter);
+            });
+            const mkStatusFilter = Vue.computed({
+                get: () => state.mkStatusFilter,
+                set: v => { state.mkStatusFilter = v; }
+            });
+            const mkSelected = Vue.computed({
+                get: () => state.mkSelected,
+                set: v => { state.mkSelected = v; }
+            });
+            const pembayaran = Vue.computed(() => state.pembayaran);
+            const izin = Vue.computed(() => state.izin);
+            const izinNpm = Vue.computed({
+                get: () => state.izinNpm,
+                set: v => { state.izinNpm = v; }
+            });
+            const izinNama = Vue.computed({
+                get: () => state.izinNama,
+                set: v => { state.izinNama = v; }
+            });
+            const view = Vue.computed(() => state.view);
+            const tab = Vue.computed(() => state.tab);
+            const loading = Vue.computed(() => state.loading);
+            const sidebarOpen = Vue.ref(false);
+            const pageTitle = Vue.computed(() => {
+                const map = { rekap: 'Rekap', mk: 'Pemeriksaan MK', pembayaran: 'Pembayaran', izin: 'Izin Daftar Ulang', pengaturan: 'Pengaturan' };
+                return map[state.tab] || '';
+            });
+            const uploadModeLabel = Vue.computed(() => state.setForm.uploadMode === 'bypass' ? 'Bypass' : 'Default (Strict)');
+            const pendingBayar = Vue.computed(() => (state.pembayaran || []).filter(r => r.statusVerifikasi !== 'Sudah Diverifikasi').length);
+            return { state, navItems, view, tab, loading, sidebarOpen, pageTitle, uploadModeLabel, pendingBayar, loginPassword, periodeLabel, openRows, showGuide, guideSteps, filteredStudents, angkatanOptions, mkNames, semesterMax, stats, emailProgress, semesterStats, filters: state.filters, mkGroups, mkReview, mkFilteredStudents, mkStatusFilter, pembayaran, izin, mkSelected, izinNpm, izinNama, setForm: state.setForm, jadwalForm: state.jadwalForm, mkForm: state.mkForm, mkSemesters };
+        },
+        methods: {
+            switchTab(key) {
+                state.tab = key;
+                this.sidebarOpen = false;
+                if (key === 'rekap') { if (!state.students.length) this.loadDashboard(); }
+                else if (key === 'mk') {
+                    if (!state.mkOptions.length) this.loadMkOptions();
+                    if (state.mkSelected && !state.mkReview) this.loadMkReview();
+                } else if (key === 'pembayaran') { if (!state.pembayaran.length) this.loadPembayaran(); }
+                else if (key === 'izin') { if (!state.izin.length) this.loadIzin(); }
+                else if (key === 'pengaturan') { if (!state.settings) this.loadSettings(); }
+            },
+            refreshCurrentTab() {
+                const key = state.tab;
+                if (key === 'rekap') this.loadDashboard();
+                else if (key === 'mk') { this.loadMkOptions(); if (state.mkSelected) this.loadMkReview(); }
+                else if (key === 'pembayaran') this.loadPembayaran();
+                else if (key === 'izin') this.loadIzin();
+                else if (key === 'pengaturan') { this.loadSettings(); this.loadMkAdminData(); }
+            },
+            beginBusy(label) { state.busy = label || 'Memuat data...'; },
+            endBusy() { state.busy = ''; },
+            fetchBootstrap() {
+                setLoading(true);
+                return server('getDashboardBootstrap').then((res) => {
+                    setLoading(false);
+                    this.populateBootstrap(res || {});
+                    return res;
+                }).catch((err) => {
+                    setLoading(false);
+                    if (state.token) Swal.fire({ icon: 'error', title: 'Gagal memuat data', text: err });
+                    throw err;
+                });
+            },
+            populateBootstrap(res) {
+                const s = res.settings || {};
+                state.settings = s;
+                state.setForm.periode = s.periode || 'ganjil';
+                state.setForm.tahunAjaran = s.tahunAjaran || '';
+                state.setForm.uploadMode = s.uploadMode || 'default';
+                const p = s.pdf || {};
+                state.setForm.pdfLogoUrl = p.logoUrl || '';
+                state.setForm.pdfTtdUrl = p.ttdUrl || '';
+                const j = s.jadwal || {};
+                state.jadwalForm.pendaftaran = {
+                    bukaLocal: this.datetimeToLocal((j.pendaftaran || {}).buka),
+                    tutupLocal: this.datetimeToLocal((j.pendaftaran || {}).tutup),
+                    status: (j.pendaftaran || {}).status || 'open'
+                };
+                state.jadwalForm.upload = {
+                    bukaLocal: this.datetimeToLocal((j.upload || {}).buka),
+                    tutupLocal: this.datetimeToLocal((j.upload || {}).tutup),
+                    status: (j.upload || {}).status || 'open'
+                };
+                const d = res.dashboard || {};
+                state.students = d.students || [];
+                state.stats = d.stats || { totalPendaftar: 0, menunggu: 0, acc: 0, tidakAcc: 0, sudahBayar: 0, belumBayar: 0 };
+                this.recomputeEmailProgress();
+                const sem = {};
+                state.students.forEach((s2) => (s2.semesters || []).forEach(semLabel => { sem[semLabel] = (sem[semLabel] || 0) + 1; }));
+                state.semesterStats = Object.keys(sem).map(k => ({ sem: k, count: sem[k] }));
+                state.mkOptions = res.mkOptions || [];
+                state.settingsMk = res.mkAdminData || { ganjil: {}, genap: {}, masterSks: {} };
+                this.syncMkForm();
+            },
+            doLogin() {
+                if (!state.loginPassword) { Swal.fire({ icon: 'warning', title: 'Password wajib diisi' }); return; }
+                setLoading(true);
+                google.script.run.withSuccessHandler((res) => {
+                    setLoading(false);
+                    if (res && res.status === 'success') {
+                        state.token = res.token;
+                        sessionStorage.setItem('dashToken', res.token);
+                        state.view = 'main';
+                        this.fetchBootstrap();
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'Login gagal', text: (res && res.message) || 'Password salah' });
+                    }
+                }).withFailureHandler((err) => {
+                    setLoading(false);
+                    Swal.fire({ icon: 'error', title: 'Login gagal', text: (err && err.message) ? err.message : String(err) });
+                }).verifyAdminLogin(state.loginPassword);
+            },
+            doLogout() {
+                if (state.token) { try { google.script.run.logoutAdmin(state.token); } catch (e) { } }
+                state.view = 'login';
+                state.token = '';
+                sessionStorage.removeItem('dashToken');
+            },
+            toggleRow(npm) { this.openRows[npm] = !this.openRows[npm]; },
+            loadDashboard() {
+                this.beginBusy('Memuat data rekap...');
+                server('getDashboardData').then((res) => {
+                    this.endBusy();
+                    state.students = (res && res.students) || [];
+                    state.stats = (res && res.stats) || { totalPendaftar: 0, menunggu: 0, acc: 0, tidakAcc: 0, sudahBayar: 0, belumBayar: 0 };
+                    this.recomputeEmailProgress();
+                    const sem = {};
+                    state.students.forEach(s => (s.semesters || []).forEach(semLabel => { sem[semLabel] = (sem[semLabel] || 0) + 1; }));
+                    state.semesterStats = Object.keys(sem).map(k => ({ sem: k, count: sem[k] }));
+                }).catch((err) => { this.endBusy(); if (state.token) Swal.fire({ icon: 'error', title: 'Gagal memuat data', text: err }); });
+            },
+            saveDecision(npm, mk, selectEl, alasanEl) {
+                const decision = selectEl.value;
+                let alasan = alasanEl ? alasanEl.value : '';
+                if (decision === 'Tidak ACC' && !String(alasan || '').trim()) {
+                    Swal.fire({ icon: 'warning', title: 'Alasan wajib diisi untuk Tidak ACC' }); return;
+                }
+                if (!decision) { Swal.fire({ icon: 'warning', title: 'Pilih keputusan dulu' }); return; }
+                setLoading(true);
+                server('saveMkDecision', [npm, mk, decision, alasan]).then((student) => {
+                    setLoading(false);
+                    if (student && student.npm) {
+                        const idx = state.students.findIndex(s => s.npm === student.npm);
+                        if (idx !== -1) state.students[idx] = student;
+                        this.recomputeStats();
+                        this.recomputeEmailProgress();
+                        Swal.fire({ icon: 'success', title: 'Keputusan disimpan', text: 'Status: ' + student.overall, timer: 1200, showConfirmButton: false });
+                    }
+                }).catch((err) => { setLoading(false); Swal.fire({ icon: 'error', title: 'Gagal menyimpan', text: err }); });
+            },
+            recomputeStats() {
+                const st = { totalPendaftar: state.students.length, menunggu: 0, acc: 0, tidakAcc: 0, sudahBayar: 0, belumBayar: 0 };
+                state.students.forEach(s => {
+                    if (s.overall === 'Menunggu') st.menunggu++;
+                    else if (s.overall === 'ACC') st.acc++;
+                    else if (s.overall === 'Tidak ACC') st.tidakAcc++;
+                    if (s.bayar) st.sudahBayar++;
+                });
+                st.belumBayar = st.totalPendaftar - st.sudahBayar;
+                state.stats = st;
+            },
+            recomputeEmailProgress() {
+                const em = { total: state.students.length, terkirim: 0, belum: 0, menunggu: 0 };
+                state.students.forEach(s => {
+                    if (s.overall === 'Menunggu') em.menunggu++;
+                    else if (s.emailSent) em.terkirim++;
+                    else em.belum++;
+                });
+                state.emailProgress = em;
+            },
+            openEditProfil(s) {
+                Swal.fire({
+                    title: 'Edit Profil - ' + esc(s.npm),
+                    html:
+                        '<input id="swal-nama" class="swal2-input" placeholder="Nama" value="' + esc(s.nama || '') + '">' +
+                        '<input id="swal-email" class="swal2-input" type="email" placeholder="Email" value="' + esc(s.email || '') + '">' +
+                        '<input id="swal-hp" class="swal2-input" placeholder="No. HP/WA" value="' + esc(s.hp || '') + '">' +
+                        '<input id="swal-angkatan" class="swal2-input" placeholder="Angkatan" value="' + esc(s.angkatan || '') + '">' +
+                        '<input id="swal-semester" class="swal2-input" placeholder="Semester" value="' + esc(s.semester || '') + '">',
+                    width: 480, focusConfirm: false, showCancelButton: true,
+                    confirmButtonText: 'Simpan', cancelButtonText: 'Batal',
+                    preConfirm: () => ({
+                        nama: document.getElementById('swal-nama').value,
+                        email: document.getElementById('swal-email').value,
+                        hp: document.getElementById('swal-hp').value,
+                        angkatan: document.getElementById('swal-angkatan').value,
+                        semester: document.getElementById('swal-semester').value
+                    })
+                }).then((result) => {
+                    if (!result.isConfirmed) return;
+                    setLoading(true);
+                    server('updateStudentProfile', [s.npm, result.value]).then((student) => {
+                        setLoading(false);
+                        if (student && student.npm) {
+                            const idx = state.students.findIndex(x => x.npm === student.npm);
+                            if (idx !== -1) state.students[idx] = student;
+                        }
+                        Swal.fire({ icon: 'success', title: 'Profil diperbarui', timer: 1200, showConfirmButton: false });
+                    }).catch((err) => { setLoading(false); Swal.fire({ icon: 'error', title: 'Gagal memperbarui profil', text: err }); });
+                });
+            },
+            confirmResend(npm) {
+                Swal.fire({
+                    title: 'Kirim ulang email?', text: 'Email ACC + PDF akan dikirim ulang.', icon: 'question',
+                    showCancelButton: true, confirmButtonText: 'Kirim', cancelButtonText: 'Batal'
+                }).then((result) => {
+                    if (!result.isConfirmed) return;
+                    setLoading(true);
+                    server('resendAccEmail', [npm]).then((res) => {
+                        setLoading(false);
+                        Swal.fire({ icon: (res && res.status === 'success') ? 'success' : 'info', title: (res && res.message) || 'Proses selesai', timer: 2000, showConfirmButton: false });
+                        this.loadDashboard();
+                    }).catch((err) => { setLoading(false); Swal.fire({ icon: 'error', title: 'Gagal kirim ulang', text: err }); });
+                });
+            },
+            studentDetailHtml(s) {
+                let rows = '';
+                (s.mks || []).forEach(m => {
+                    rows += '<div class="flex flex-wrap items-center gap-2 mb-2">' +
+                        '<span class="font-medium text-sm" style="min-width:160px;">' + esc(m.name) + '</span>' +
+                        this.chipOf(m.status) +
+                        '<select class="mk-select" data-mk="' + esc(m.name) + '">' +
+                        '<option value="">-- Pilih --</option>' +
+                        '<option value="ACC"' + (m.status === 'ACC' ? ' selected' : '') + '>ACC</option>' +
+                        '<option value="Tidak ACC"' + (m.status === 'Tidak ACC' ? ' selected' : '') + '>Tidak ACC</option>' +
+                        '</select>' +
+                        '<input class="alasan-input' + (m.status === 'Tidak ACC' ? '' : ' hidden') + '" data-mk="' + esc(m.name) + '" placeholder="Alasan (wajib jika Tidak ACC)" value="' + esc(m.alasan || '') + '">' +
+                        '<button class="btn btn-primary btn-sm" data-action="saveDecision" data-npm="' + esc(s.npm) + '" data-mk="' + esc(m.name) + '">Simpan</button>' +
+                        '</div>';
+                });
+                let emailChip = s.overall === 'Menunggu'
+                    ? '<span class="chip chip-nopay"><span class="dot"></span>Menunggu semua MK diputuskan</span>'
+                    : (s.emailSent ? '<span class="chip chip-acc"><span class="dot"></span>Email Terkirim</span>' : '<span class="chip chip-pending"><span class="dot"></span>Email Belum Terkirim</span>');
+                return '<table style="width:100%;font-size:0.8rem;border-collapse:collapse;">' +
+                    '<tr><td style="padding:4px 8px;width:110px;"><strong>Email</strong></td><td style="padding:4px 8px;">' + esc(s.email || '-') + '</td>' +
+                    '<td style="padding:4px 8px;"><strong>Status Email</strong></td><td style="padding:4px 8px;">' + emailChip + '</td></tr>' +
+                    '<tr><td style="padding:4px 8px;"><strong>No. HP/WA</strong></td><td style="padding:4px 8px;">' + esc(s.hp || '-') + '</td>' +
+                    '<td style="padding:4px 8px;"><strong>Aksi</strong></td><td style="padding:4px 8px;">' +
+                    '<button class="text-xs font-semibold underline mr-3 btn-tap" style="color:var(--primary);" data-action="editProfil" data-npm="' + esc(s.npm) + '">Edit Profil</button>' +
+                    (s.overall === 'Menunggu' ? '' : '<button class="text-xs font-semibold underline btn-tap" style="color:#3730a3;" data-action="resendEmail" data-npm="' + esc(s.npm) + '">Kirim Ulang Email</button>') +
+                    '</td></tr>' +
+                    (this.safeUrl(s.krsUrl) ? '<tr><td style="padding:4px 8px;"><strong>KRS</strong></td><td style="padding:4px 8px;"><a href="' + esc(this.safeUrl(s.krsUrl)) + '" target="_blank">Lihat KRS</a></td></tr>' : '') +
+                    '</table>' +
+                    '<div class="mt-2 pt-2" style="border-top:1px solid #e5e7eb;">' + rows + '</div>';
+            },
+            chipOf(status) {
+                if (status === 'ACC') return '<span class="chip chip-acc"><span class="dot"></span>ACC</span>';
+                if (status === 'Tidak ACC') return '<span class="chip chip-reject"><span class="dot"></span>Tidak ACC</span>';
+                return '<span class="chip chip-pending"><span class="dot"></span>Belum</span>';
+            },
+            emailChip(s) {
+                if (s.overall === 'Menunggu') return '<span class="chip chip-nopay"><span class="dot"></span>Menunggu</span>';
+                return s.emailSent ? '<span class="chip chip-acc"><span class="dot"></span>Terkirim</span>' : '<span class="chip chip-pending"><span class="dot"></span>Belum Terkirim</span>';
+            },
+            payChip(label) {
+                return label === 'Sudah' ? '<span class="chip chip-pay"><span class="dot"></span>Sudah</span>' : '<span class="chip chip-nopay"><span class="dot"></span>Belum</span>';
+            },
+            loadMkOptions() {
+                this.beginBusy('Memuat daftar MK...');
+                server('getMkOptions').then((opts) => {
+                    this.endBusy();
+                    state.mkOptions = opts || [];
+                }).catch((err) => { this.endBusy(); if (state.token) Swal.fire({ icon: 'error', title: 'Gagal memuat daftar MK', text: err }); });
+            },
+            loadMkReview() {
+                const name = state.mkSelected;
+                state.mkStatusFilter = '';
+                if (!name) { state.mkReview = null; return; }
+                this.beginBusy('Memuat review MK...');
+                server('getMkReviewData', [name]).then((res) => {
+                    this.endBusy();
+                    state.mkReview = res || null;
+                }).catch((err) => { this.endBusy(); Swal.fire({ icon: 'error', title: 'Gagal memuat data MK', text: err }); });
+            },
+            saveMkReview(npm, btn) {
+                const tr = btn.closest('tr');
+                const selectEl = tr.querySelector('select.mk-select');
+                const alasanEl = tr.querySelector('input.alasan-input');
+                const decision = selectEl ? selectEl.value : '';
+                const alasan = alasanEl ? alasanEl.value : '';
+                if (decision === 'Tidak ACC' && !String(alasan || '').trim()) {
+                    Swal.fire({ icon: 'warning', title: 'Alasan wajib diisi untuk Tidak ACC' }); return;
+                }
+                if (!decision) { Swal.fire({ icon: 'warning', title: 'Pilih keputusan dulu' }); return; }
+                setLoading(true);
+                server('saveMkDecision', [npm, state.mkSelected, decision, alasan]).then(() => {
+                    setLoading(false);
+                    Swal.fire({ icon: 'success', title: 'Keputusan disimpan', timer: 1200, showConfirmButton: false });
+                    this.loadMkReview();
+                }).catch((err) => { setLoading(false); Swal.fire({ icon: 'error', title: 'Gagal menyimpan', text: err }); });
+            },
+            loadPembayaran() {
+                this.beginBusy('Memuat pembayaran...');
+                server('getPembayaranData').then((rows) => {
+                    this.endBusy();
+                    state.pembayaran = rows || [];
+                }).catch((err) => { this.endBusy(); if (state.token) Swal.fire({ icon: 'error', title: 'Gagal memuat pembayaran', text: err }); });
+            },
+            openUrl(url) { if (url) window.open(url, '_blank'); },
+            safeUrl(url) {
+                const s = String(url || '').trim();
+                return /^(https?:)?\/\//i.test(s) ? s : '';
+            },
+            drivePreviewUrl(url) {
+                const m = String(url || '').match(/[\/\\](?:file\/d\/|open\?id=|uc\?export=download&id=)([a-zA-Z0-9\-_]+)/);
+                return m ? 'https://drive.google.com/file/d/' + m[1] + '/preview' : url;
+            },
+            previewBukti(url) {
+                Swal.fire({
+                    title: 'Preview Bukti Pembayaran',
+                    html: '<iframe src="' + esc(this.drivePreviewUrl(url)) + '" style="width:100%;height:480px;border:0;border-radius:8px;"></iframe>',
+                    width: 720, showCloseButton: true, showConfirmButton: false
+                });
+            },
+            autoCek(npm) {
+                setLoading(true);
+                server('autoCheckBukti', [npm]).then((res) => {
+                    setLoading(false);
+                    Swal.fire({ icon: (res && res.valid) ? 'success' : 'error', title: (res && res.valid) ? 'NPM PDF Cocok' : 'Cek Gagal',
+                        text: (res && res.valid) ? 'NPM pada bukti sesuai: ' + esc(res.npm || npm) : 'Alasan: ' + esc((res && res.reason) || '-') });
+                }).catch((err) => { setLoading(false); Swal.fire({ icon: 'error', title: 'Gagal cek', text: err }); });
+            },
+            verifyBayar(npm) {
+                setLoading(true);
+                server('verifyPembayaran', [npm]).then((res) => {
+                    setLoading(false);
+                    Swal.fire({ icon: 'success', title: 'Berhasil', text: (res && res.message) || 'Pembayaran terverifikasi', timer: 1500, showConfirmButton: false });
+                    this.loadPembayaran();
+                }).catch((err) => { setLoading(false); Swal.fire({ icon: 'error', title: 'Gagal', text: err }); });
+            },
+            loadIzin() {
+                this.beginBusy('Memuat izin daftar ulang...');
+                server('getIzinList').then((rows) => {
+                    this.endBusy();
+                    state.izin = (rows || []).map(r => {
+                        let label = 'Kuota ' + r.quota;
+                        let cls = 'chip chip-pending';
+                        if (r.quota === -1) { label = 'Aktif tanpa batas'; cls = 'chip chip-acc'; }
+                        else if (r.quota === 0) { label = 'Dicabut'; cls = 'chip chip-nopay'; }
+                        return Object.assign({}, r, { statusLabel: label, statusClass: cls });
+                    });
+                }).catch((err) => { this.endBusy(); if (state.token) Swal.fire({ icon: 'error', title: 'Gagal memuat izin', text: err }); });
+            },
+            grantIzin() {
+                const npm = state.izinNpm.trim();
+                if (!npm) { Swal.fire({ icon: 'warning', title: 'NPM wajib diisi' }); return; }
+                setLoading(true);
+                server('grantRegistrasiIzin', [npm, state.izinNama.trim()]).then((res) => {
+                    setLoading(false);
+                    Swal.fire({ icon: 'success', title: 'Berhasil', text: (res && res.message) || 'Izin diberikan', timer: 1500, showConfirmButton: false });
+                    state.izinNpm = ''; state.izinNama = '';
+                    this.loadIzin();
+                }).catch((err) => { setLoading(false); Swal.fire({ icon: 'error', title: 'Gagal', text: err }); });
+            },
+            revokeIzin(npm) {
+                Swal.fire({ title: 'Cabut izin?', text: 'Mahasiswa ' + esc(npm) + ' tidak dapat daftar ulang lagi.', icon: 'question',
+                    showCancelButton: true, confirmButtonText: 'Cabut', cancelButtonText: 'Batal' }).then((result) => {
+                    if (!result.isConfirmed) return;
+                    setLoading(true);
+                    server('revokeRegistrasiIzin', [npm]).then((res) => {
+                        setLoading(false);
+                        Swal.fire({ icon: 'success', title: 'Berhasil', text: (res && res.message) || 'Izin dicabut', timer: 1500, showConfirmButton: false });
+                        this.loadIzin();
+                    }).catch((err) => { setLoading(false); Swal.fire({ icon: 'error', title: 'Gagal', text: err }); });
+                });
+            },
+            datetimeToLocal(v) {
+                if (!v) return '';
+                const m = String(v).match(/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})/);
+                if (m) return m[3] + '-' + m[2] + '-' + m[1] + 'T' + m[4] + ':' + m[5];
+                return v;
+            },
+            localToDatetime(v) {
+                if (!v) return '';
+                const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+                if (m) return m[3] + '/' + m[2] + '/' + m[1] + ' ' + m[4] + ':' + m[5];
+                return String(v).trim();
+            },
+            loadSettings() {
+                this.beginBusy('Memuat pengaturan...');
+                server('getSettings').then((res) => {
+                    this.endBusy();
+                    state.settings = res || {};
+                    const s = res || {};
+                    state.setForm.periode = s.periode || 'ganjil';
+                    state.setForm.tahunAjaran = s.tahunAjaran || '';
+                    state.setForm.uploadMode = s.uploadMode || 'default';
+                    const p = s.pdf || {};
+                    state.setForm.pdfLogoUrl = p.logoUrl || '';
+                    state.setForm.pdfTtdUrl = p.ttdUrl || '';
+                    const j = s.jadwal || {};
+                    state.jadwalForm.pendaftaran = {
+                        bukaLocal: this.datetimeToLocal((j.pendaftaran || {}).buka),
+                        tutupLocal: this.datetimeToLocal((j.pendaftaran || {}).tutup),
+                        status: (j.pendaftaran || {}).status || 'open'
+                    };
+                    state.jadwalForm.upload = {
+                        bukaLocal: this.datetimeToLocal((j.upload || {}).buka),
+                        tutupLocal: this.datetimeToLocal((j.upload || {}).tutup),
+                        status: (j.upload || {}).status || 'open'
+                    };
+                    if (!state.settingsMk) this.loadMkAdminData();
+                }).catch((err) => { this.endBusy(); if (state.token) Swal.fire({ icon: 'error', title: 'Gagal memuat pengaturan', text: err }); });
+            },
+            loadMkAdminData() {
+                server('getMkAdminData').then((mk) => {
+                    state.settingsMk = mk || { ganjil: {}, genap: {}, masterSks: {} };
+                    this.syncMkForm();
+                }).catch(() => { });
+            },
+            syncMkForm() {
+                const mk = state.settingsMk || { ganjil: {}, genap: {} };
+                const data = mk[state.mkForm.set] || {};
+                state.mkForm.slots = {};
+                ['Sem1', 'Sem3', 'Sem5', 'Sem7', 'Sem2', 'Sem4', 'Sem6', 'Sem8'].forEach(sem => {
+                    const arr = data[sem];
+                    state.mkForm.slots[sem] = (arr || Array.from({ length: 7 }, () => ({ nama: '', sks: '' }))).map(x => ({ nama: x.nama || '', sks: x.sks || '' }));
+                });
+            },
+            mkSlots(sem) { return (state.mkForm.slots && state.mkForm.slots[sem]) || []; },
+            switchMkSet(set) {
+                state.mkForm.set = set;
+                this.syncMkForm();
+            },
+            savePeriode() {
+                setLoading(true);
+                server('saveSettings', {
+                    periode: state.setForm.periode,
+                    tahunAjaran: state.setForm.tahunAjaran
+                }).then((res) => {
+                    setLoading(false);
+                    Swal.fire({ icon: 'success', title: (res && res.message) || 'Tersimpan', timer: 1500, showConfirmButton: false });
+                    this.loadSettings();
+                }).catch((err) => { setLoading(false); Swal.fire({ icon: 'error', title: 'Gagal menyimpan', text: err }); });
+            },
+            saveJadwal(kind) {
+                const j = state.jadwalForm[kind];
+                const payload = {};
+                payload[kind === 'pendaftaran' ? 'pendaftaranBuka' : 'uploadBuka'] = this.localToDatetime(j.bukaLocal);
+                payload[kind === 'pendaftaran' ? 'pendaftaranTutup' : 'uploadTutup'] = this.localToDatetime(j.tutupLocal);
+                setLoading(true);
+                server('saveSettings', payload).then((res) => {
+                    setLoading(false);
+                    Swal.fire({ icon: 'success', title: (res && res.message) || 'Tersimpan', timer: 1500, showConfirmButton: false });
+                    this.loadSettings();
+                }).catch((err) => { setLoading(false); Swal.fire({ icon: 'error', title: 'Gagal menyimpan', text: err }); });
+            },
+            saveUploadMode() {
+                setLoading(true);
+                server('saveSettings', { uploadMode: state.setForm.uploadMode }).then((res) => {
+                    setLoading(false);
+                    Swal.fire({ icon: 'success', title: (res && res.message) || 'Tersimpan', timer: 1500, showConfirmButton: false });
+                    this.loadSettings();
+                }).catch((err) => { setLoading(false); Swal.fire({ icon: 'error', title: 'Gagal menyimpan', text: err }); });
+            },
+            savePdfAssets() {
+                setLoading(true);
+                server('saveSettings', {
+                    pdfLogoUrl: (state.setForm.pdfLogoUrl || '').trim(),
+                    pdfTtdUrl: (state.setForm.pdfTtdUrl || '').trim()
+                }).then((res) => {
+                    setLoading(false);
+                    Swal.fire({ icon: 'success', title: (res && res.message) || 'Tersimpan', timer: 1500, showConfirmButton: false });
+                    this.loadSettings();
+                }).catch((err) => { setLoading(false); Swal.fire({ icon: 'error', title: 'Gagal menyimpan', text: err }); });
+            },
+            saveMkSet() {
+                const set = state.mkForm.set;
+                Swal.fire({
+                    title: 'Simpan set ' + (set === 'ganjil' ? 'Ganjil' : 'Genap') + '?',
+                    text: 'Perubahan diterapkan ke daftar mata kuliah dan master SKS.',
+                    icon: 'question', showCancelButton: true, confirmButtonText: 'Simpan', cancelButtonText: 'Batal'
+                }).then((result) => {
+                    if (!result.isConfirmed) return;
+                    const run = (sem) => server('saveMkAdminData', [set, sem, (state.mkForm.slots[sem] || []).map(x => ({ nama: x.nama, sks: x.sks }))]);
+                    const sems = set === 'ganjil' ? ['Sem1', 'Sem3', 'Sem5', 'Sem7'] : ['Sem2', 'Sem4', 'Sem6', 'Sem8'];
+                    setLoading(true);
+                    Promise.all(sems.map(run)).then(() => {
+                        setLoading(false);
+                        Swal.fire({ icon: 'success', title: 'Set ' + (set === 'ganjil' ? 'Ganjil' : 'Genap') + ' tersimpan', timer: 1500, showConfirmButton: false });
+                        this.loadMkAdminData();
+                    }).catch((err) => { setLoading(false); Swal.fire({ icon: 'error', title: 'Gagal menyimpan MK', text: err }); });
+                });
+            },
+            jadwalBadge(status) {
+                if (status === 'open') return 'chip chip-acc';
+                if (status === 'not_yet') return 'chip chip-pending';
+                return 'chip chip-nopay';
+            },
+            jadwalLabel(status) {
+                if (status === 'open') return 'Dibuka';
+                if (status === 'not_yet') return 'Belum dibuka';
+                return 'Ditutup';
+            }
+        },
+        mounted() {
+            const saved = sessionStorage.getItem('dashToken');
+            if (saved) {
+                state.token = saved;
+                setLoading(true);
+                server('getDashboardBootstrap').then((res) => {
+                    setLoading(false);
+                    if (state.token !== saved) return;
+                    this.populateBootstrap(res || {});
+                    state.view = 'main';
+                }).catch(() => {
+                    setLoading(false);
+                    if (state.token !== saved) return;
+                    state.token = '';
+                    sessionStorage.removeItem('dashToken');
+                });
+            }
+            document.addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-action]');
+                if (!btn) return;
+                const action = btn.getAttribute('data-action');
+                if (action === 'saveDecision') {
+                    const npm = btn.getAttribute('data-npm');
+                    const mk = btn.getAttribute('data-mk');
+                    const wrap = btn.parentElement;
+                    const selectEl = wrap.querySelector('select[data-mk="' + mk + '"]');
+                    const alasanEl = wrap.querySelector('input.alasan-input[data-mk="' + mk + '"]');
+                    this.saveDecision(npm, mk, selectEl, alasanEl);
+                } else if (action === 'editProfil') {
+                    const npm = btn.getAttribute('data-npm');
+                    const s = state.students.find(x => x.npm === npm);
+                    if (s) this.openEditProfil(s);
+                } else if (action === 'resendEmail') {
+                    this.confirmResend(btn.getAttribute('data-npm'));
+                } else if (action === 'saveMkReview') {
+                    this.saveMkReview(btn.getAttribute('data-npm'), btn);
+                }
+            });
+            document.addEventListener('change', (e) => {
+                if (e.target && e.target.classList && e.target.classList.contains('mk-select')) {
+                    const wrap = e.target.closest('.detail-cell') || e.target.closest('tr');
+                    const mkAttr = e.target.getAttribute('data-mk');
+                    const alasanEl = wrap ? (mkAttr ? wrap.querySelector('input.alasan-input[data-mk="' + mkAttr + '"]') : wrap.querySelector('input.alasan-input')) : null;
+                    if (alasanEl) alasanEl.classList.toggle('hidden', e.target.value !== 'Tidak ACC');
+                }
+            });
+        }
+    });
+    app.mount('#app');
+</script>
+</body>
+</html>
