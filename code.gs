@@ -1411,6 +1411,7 @@ function saveToSpreadsheet(formData) {
                 Logger.log('saveToSpreadsheet sync warning: ' + syncErr.message);
             }
         });
+        invalidateDashboardCache_();
         return true;
     } catch (error) {
         Logger.log('Error saving to spreadsheet: ' + error.message);
@@ -1795,8 +1796,8 @@ var MK_COL_MAP = [
 //   Sem2 MK: idx 71-77, Sem4 MK: idx 78-84, Sem6 MK: idx 85-91
 //   SKS genap berurutan: idx 92-112 (sksStartIdx per semester)
 var MK_GENAP_PEND_COL_MAP = [
-    { mkSheetCol: 8, semLabel: 'Sem2', startIdx: 71, slots: 7, sksStartIdx: 92 },   // H → AL2 (idx 71-77)
-    { mkSheetCol: 9, semLabel: 'Sem4', startIdx: 78, slots: 7, sksStartIdx: 99 },   // I → idx 78-84
+    { mkSheetCol: 8,  semLabel: 'Sem2', startIdx: 71, slots: 7, sksStartIdx: 92 },   // H → AL2 (idx 71-77)
+    { mkSheetCol: 9,  semLabel: 'Sem4', startIdx: 78, slots: 7, sksStartIdx: 99 },   // I → idx 78-84
     { mkSheetCol: 10, semLabel: 'Sem6', startIdx: 85, slots: 7, sksStartIdx: 106 }   // J → idx 85-91
 ];
 
@@ -3432,6 +3433,7 @@ function grantRegistrasiIzin(token, npm, nama) {
         var npmClean = normalizeNpm_(npm);
         if (!npmClean) throw new Error('NPM tidak valid');
         setIzinQuota_(ss, npmClean, String(nama || '').trim(), -1);
+        invalidateDashboardCache_();
         return { status: 'success', message: 'Izin daftar ulang diberikan untuk ' + npmClean };
     } finally {
         try { lock.releaseLock(); } catch (e) { }
@@ -3451,6 +3453,7 @@ function revokeRegistrasiIzin(token, npm) {
             var rowIdx = findRowIndexByNpm_(sheet, npmClean);
             if (rowIdx !== -1) sheet.getRange(rowIdx, IZIN_QUOTA_COLUMN).setValue(0);
         }
+        invalidateDashboardCache_();
         return { status: 'success', message: 'Izin daftar ulang dicabut untuk ' + npmClean };
     } finally {
         try { lock.releaseLock(); } catch (e) { }
@@ -3487,7 +3490,7 @@ function readPendaftaranStudents_(ss) {
     var sheet = ss.getSheetByName('Pendaftaran');
     var students = [];
     if (!sheet || sheet.getLastRow() <= 1) return students;
-    var lastCol = Math.max(sheet.getLastColumn(), 92);
+    var lastCol = Math.max(sheet.getLastColumn(), 37);
     var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim().toLowerCase(); });
     var idxNpm = headers.indexOf('npm'); if (idxNpm < 0) idxNpm = 1;
     var idxNama = headers.indexOf('nama lengkap'); if (idxNama < 0) idxNama = 2;
@@ -3535,7 +3538,7 @@ function readApprovedAndRejected_(ss, students) {
 
     var kirim = ss.getSheetByName(KIRIM_SHEET_NAME);
     if (kirim && kirim.getLastRow() > 1) {
-        var kCols = Math.max(kirim.getLastColumn(), 92);
+        var kCols = Math.max(kirim.getLastColumn(), 91);
         var kData = kirim.getRange(2, 1, kirim.getLastRow() - 1, kCols).getValues();
         for (var i = 0; i < kData.length; i++) {
             var npmK = normalizeNpm_(kData[i][1]);
@@ -3577,10 +3580,38 @@ function readPaidNpms_(ss) {
     return paid;
 }
 
+var DASH_CACHE_NS = 'dashv1_';
+function dashCacheKey_(name) { return DASH_CACHE_NS + name; }
+function invalidateDashboardCache_(mkName) {
+    try {
+        var cache = CacheService.getScriptCache();
+        cache.removeAll([dashCacheKey_('data'), dashCacheKey_('mkOptions'), dashCacheKey_('settings')]);
+        if (mkName) cache.remove(dashCacheKey_('review_' + normalizeMkName_(mkName)));
+    } catch (e) {
+        Logger.log('invalidateDashboardCache_ warning: ' + e.message);
+    }
+}
+
 function getDashboardData(token, filters) {
     requireAdmin_(token);
     filters = filters || {};
+    var noFilter = !filters.angkatan && !filters.semester && !filters.mk && !filters.status && !filters.bayar;
+    var cache = CacheService.getScriptCache();
+    if (noFilter) {
+        var cached = cache.get(dashCacheKey_('data'));
+        if (cached) {
+            try { return JSON.parse(cached); } catch (e) { }
+        }
+    }
     var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var result = getDashboardDataWithSs_(ss, filters);
+    if (noFilter) {
+        try { cache.put(dashCacheKey_('data'), JSON.stringify(result), 30); } catch (e) { }
+    }
+    return result;
+}
+
+function getDashboardDataWithSs_(ss, filters) {
     var students = readPendaftaranStudents_(ss);
     var decisions = readApprovedAndRejected_(ss, students);
     var paid = readPaidNpms_(ss);
@@ -3641,7 +3672,7 @@ function getDashboardData(token, filters) {
         if (s.bayar) stats.sudahBayar++;
         result.push(s);
     }
-    stats.belumBayar = stats.totalPendaftar - stats.sudahBayar;
+        stats.belumBayar = stats.totalPendaftar - stats.sudahBayar;
     return { stats: stats, students: result };
 }
 
@@ -3693,7 +3724,7 @@ function saveMkDecision(token, npm, mkName, decision, alasan) {
         var pendSheet = ss.getSheetByName('Pendaftaran');
         var rowIdx = findRowIndexByNpm_(pendSheet, npmClean);
         if (rowIdx === -1) throw new Error('Mahasiswa tidak ditemukan di Pendaftaran');
-        var pendRow = pendSheet.getRange(rowIdx, 1, 1, Math.max(pendSheet.getLastColumn(), 92)).getValues()[0];
+        var pendRow = pendSheet.getRange(rowIdx, 1, 1, Math.max(pendSheet.getLastColumn(), 37)).getValues()[0];
         var nama = String(pendRow[2] || '').trim();
         var angkatan = String(pendRow[5] || '').trim();
         var semester = String(pendRow[6] || '').trim();
@@ -3718,6 +3749,7 @@ function saveMkDecision(token, npm, mkName, decision, alasan) {
         }
         checkAndSetACC_(ss, npmClean);
         SpreadsheetApp.flush();
+        invalidateDashboardCache_(mkName);
         return getStudentDecisionStatus_(ss, npmClean);
     } finally {
         try { lock.releaseLock(); } catch (e) { }
@@ -3794,7 +3826,7 @@ function collectDecisions_(ss, npm) {
     var decisions = [];
     var kirim = ss.getSheetByName(KIRIM_SHEET_NAME);
     if (kirim && kirim.getLastRow() > 1) {
-        var kCols = Math.max(kirim.getLastColumn(), 92);
+        var kCols = Math.max(kirim.getLastColumn(), 91);
         var kData = kirim.getRange(2, 1, kirim.getLastRow() - 1, kCols).getValues();
         for (var i = 0; i < kData.length; i++) {
             if (normalizeNpm_(kData[i][1]) !== npmClean) continue;
@@ -3824,8 +3856,8 @@ function collectDecisions_(ss, npm) {
 
 var DEFAULT_PDF_LOGO_URL = 'https://drive.google.com/file/d/10fwZMVQFir7zu9uVQ6tWvxIIIVQ0ccrH/view?usp=sharing';
 
-var PDF_LINE_GREEN_ = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABLAAAAAECAIAAAARV1HoAAAAOElEQVR4nO3XMQEAMAjEwFIDOMFB/duqDIa/U5A11W8OAAAAee52AAAAADsMIQAAQChDCAAAEOoD6j4AgqCF9f8AAAAASUVORK5CYII=';
-var PDF_LINE_GOLD_ = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABLAAAAACCAIAAADHDrL1AAAAKElEQVR4nO3OQQEAQAQAsHNl9NZGKzE8bAkWXfkAAAC4528HAAAA2DGB3AGW7lFStAAAAABJRU5ErkJggg==';
+var PDF_LINE_GREEN_ = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAADCAIAAADA0uaWAAAAK0lEQVR4nO3VMQ0AAAgEMRzgBAf4t4UMhm9SAbdd9Q4AxKr3AgB4ZIQARDuSDln+SRTSxQAAAABJRU5ErkJggg==';
+var PDF_LINE_BLACK_ = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAACCAIAAAALjjUzAAAAGUlEQVR4nO3BAQEAAACCIP+vbkhAAQAA8GkOEgABL+9bLwAAAABJRU5ErkJggg==';
 
 var PDF_IMAGE_CACHE_ = {};
 
@@ -3945,21 +3977,30 @@ function buildAccLetterHtml_(student, decisions) {
     var ttdSrc = ttdUrl ? pdf_getEmbeddedImage_(ttdUrl) : '';
 
     var logoDim = pdf_getImageDimensionsFromDataUri_(logoSrc);
-    var logoSize = pdf_containSize_(logoDim ? logoDim.w : 95, logoDim ? logoDim.h : 95, 95, 95);
+    var logoSize = pdf_containSize_(logoDim ? logoDim.w : 78, logoDim ? logoDim.h : 92, 78, 92);
 
     var pasFotoHtml = '';
     if (student.pasfotoUrl) {
         var pfSrc = pdf_getEmbeddedImage_(student.pasfotoUrl);
-        pasFotoHtml = '<img src="' + pfSrc + '" alt="Pas Foto" style="width:95px;height:115px;object-fit:cover;display:block;margin:0 auto;">';
+        pasFotoHtml = '<table align="center" border="0" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 auto;border:1px solid #1e293b;">' +
+            '<tr><td align="center" valign="middle" style="border:none;background-color:#f1f5f9;padding:1px;text-align:center;vertical-align:middle;">' +
+            '<img src="' + pfSrc + '" width="72" height="94" alt="Pas Foto" style="display:block;margin:0 auto;width:72px;height:94px;object-fit:cover;">' +
+            '</td></tr></table>';
     } else {
-        pasFotoHtml = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:8px;color:#94a3b8;padding-top:45px;">3 x 4</div>';
+        pasFotoHtml = '<table align="center" border="0" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 auto;border:1.5px dashed #94a3b8;width:72px;height:94px;">' +
+            '<tr><td align="center" valign="middle" style="border:none;background-color:#ffffff;text-align:center;vertical-align:middle;height:94px;">' +
+            '<div style="font-family:Arial,Helvetica,sans-serif;font-size:9px;font-weight:bold;color:#94a3b8;line-height:1.2;text-align:center;">Foto<br>3 x 4</div>' +
+            '</td></tr></table>';
     }
 
     var ttdImgHtml = '';
     if (ttdSrc) {
-        ttdImgHtml = '<img src="' + ttdSrc + '" alt="Tanda Tangan" style="height:48px;width:auto;display:block;margin:0 auto;">';
+        ttdImgHtml = '<table align="center" border="0" cellpadding="0" cellspacing="0" style="width:100%;border:none;border-collapse:collapse;margin:0 auto;">' +
+            '<tr><td align="center" valign="middle" style="border:none;text-align:center;padding:0 0 0 58px;">' +
+            '<img src="' + ttdSrc + '" height="42" alt="Tanda Tangan" style="display:block;margin:0 auto;height:42px;width:auto;text-align:center;">' +
+            '</td></tr></table>';
     } else {
-        ttdImgHtml = '<div style="height:48px;"></div>';
+        ttdImgHtml = '<div style="height:42px;"></div>';
     }
 
     var rows = '';
@@ -3970,12 +4011,12 @@ function buildAccLetterHtml_(student, decisions) {
         var sem = d.semester || (info && info.semLabel ? String(info.semLabel).replace('Sem', '') : student.semester);
         var sks = d.sks || (info ? info.sks : '');
         if (sks) totalSks += parseInt(String(sks).replace(/\D/g, ''), 10) || 0;
-        var rowBg = (i % 2 === 1) ? 'background:#f8fafc;' : '';
+        var rowBg = (i % 2 === 1) ? 'background-color:#f8fafc;' : '';
         rows += '<tr>' +
-            '<td style="border:1px solid #cbd5e1;padding:3.5px 6px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;vertical-align:middle;line-height:1.2;' + rowBg + '">' + (i + 1) + '</td>' +
-            '<td style="border:1px solid #cbd5e1;padding:3.5px 6px;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;vertical-align:middle;line-height:1.2;' + rowBg + '">' + d.name + '</td>' +
-            '<td style="border:1px solid #cbd5e1;padding:3.5px 6px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;vertical-align:middle;line-height:1.2;' + rowBg + '">' + sem + '</td>' +
-            '<td style="border:1px solid #cbd5e1;padding:3.5px 6px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;font-weight:bold;vertical-align:middle;line-height:1.2;' + rowBg + '">' + sks + '</td>' +
+            '<td style="border:1px solid #cbd5e1;padding:3px 5px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10px;vertical-align:middle;' + rowBg + '">' + (i + 1) + '</td>' +
+            '<td style="border:1px solid #cbd5e1;padding:3px 6px;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:10px;vertical-align:middle;' + rowBg + '">' + d.name + '</td>' +
+            '<td style="border:1px solid #cbd5e1;padding:3px 5px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10px;vertical-align:middle;' + rowBg + '">' + sem + '</td>' +
+            '<td style="border:1px solid #cbd5e1;padding:3px 5px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:bold;color:#002b66;vertical-align:middle;' + rowBg + '">' + sks + '</td>' +
             '</tr>';
     }
 
@@ -3986,9 +4027,8 @@ function buildAccLetterHtml_(student, decisions) {
         '{{LOGO_SRC}}': logoSrc,
         '{{LOGO_W}}': String(logoSize.w),
         '{{LOGO_H}}': String(logoSize.h),
-        '{{GREEN_LINE}}': PDF_LINE_GREEN_,
-        '{{GOLD_LINE}}': PDF_LINE_GOLD_,
         '{{PERIODE}}': periode,
+        '{{PERIODE_UPPER}}': String(periode || '').toUpperCase(),
         '{{TAHUN_AJARAN}}': tahunAjaran,
         '{{NAMA}}': student.nama,
         '{{NPM}}': student.npm,
@@ -4043,9 +4083,14 @@ function htmlToPdfBlob_(html, baseName) {
             { convert: true }
         );
         docId = docFile.id;
-        applyPdfDocFormatting_(docId);
+        Utilities.sleep(1500);
+        var fmt = applyPdfDocFormatting_(docId);
+        Utilities.sleep(1000);
+        if (!fmt || !fmt.ok) {
+            Logger.log('htmlToPdfBlob_ PERINGATAN: applyPdfDocFormatting_ gagal, PDF diekspor dengan margin default');
+        }
         var exportUrl = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(docId) +
-            '/export?mimeType=application/pdf';
+            '/export?mimeType=' + encodeURIComponent('application/pdf');
         var pdfResp = UrlFetchApp.fetch(exportUrl, {
             headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
             muteHttpExceptions: true
@@ -4053,7 +4098,11 @@ function htmlToPdfBlob_(html, baseName) {
         if (pdfResp.getResponseCode() !== 200) {
             throw new Error('Gagal mengekspor PDF: ' + pdfResp.getResponseCode() + ' ' + pdfResp.getContentText());
         }
-        return Utilities.newBlob(pdfResp.getContent(), 'application/pdf', baseName + '.pdf');
+        return {
+            blob: Utilities.newBlob(pdfResp.getContent(), 'application/pdf', baseName + '.pdf'),
+            formatted: !!(fmt && fmt.ok),
+            margins: fmt || null
+        };
     } finally {
         if (docId) {
             try { DriveApp.getFileById(docId).setTrashed(true); } catch (e) { }
@@ -4061,97 +4110,168 @@ function htmlToPdfBlob_(html, baseName) {
     }
 }
 
+function waitForPdfDocReady_(docId, marker, timeoutMs) {
+    var deadline = new Date().getTime() + timeoutMs;
+    var lastErr = '';
+    var lastLen = 0;
+    var sawContent = false;
+    while (new Date().getTime() < deadline) {
+        try {
+            var d = DocumentApp.openById(docId);
+            var txt = d.getBody().getText() || '';
+            lastLen = txt.length;
+            if (txt.indexOf(marker) > -1) {
+                return { ok: true, doc: d };
+            }
+            if (txt.replace(/\s/g, '') !== '') {
+                sawContent = true;
+                Logger.log('waitForPdfDocReady_ isi ada tapi marker belum ketemu. len=' + txt.length +
+                    ' snippet=' + txt.substring(0, 120));
+            }
+        } catch (e) {
+            lastErr = e.message;
+            Logger.log('waitForPdfDocReady_ buka dokumen gagal: ' + e.message);
+        }
+        Utilities.sleep(1000);
+    }
+    Logger.log('waitForPdfDocReady_ waktu habis. errTerakhir=' + lastErr + ' len=' + lastLen + ' adaIsi=' + sawContent);
+    return { ok: false, err: lastErr, lastLen: lastLen, sawContent: sawContent };
+}
+
 function applyPdfDocFormatting_(docId) {
-    var doc = null;
+    var A4_W = 595.28;
+    var A4_H = 841.89;
+    var topPt = 12;
+    var bottomPt = 18;
+
     try {
-        doc = DocumentApp.openById(docId);
+        var doc = DocumentApp.openById(docId);
         var body = doc.getBody();
-        var topPt = 0;        // 0 margin atas agar benar-benar mepet ke atas kertas
-        var sidePt = 25;      // ~0.88 cm margin samping
-        var bottomPt = 20;    // ~0.7 cm margin bawah
-        
+
+        // Cari lebar tabel terbesar hasil konversi HTML untuk menghitung margin simetris
+        var tables = body.getTables();
+        var maxTableW = 0;
+        for (var i = 0; i < tables.length; i++) {
+            var t = tables[i];
+            try {
+                t.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+            } catch (eAlign) { }
+
+            if (t.getNumRows() > 0) {
+                var r0 = t.getRow(0);
+                var rowW = 0;
+                for (var c = 0; c < r0.getNumCells(); c++) {
+                    var cellW = r0.getCell(c).getWidth();
+                    if (cellW && cellW > 0) rowW += cellW;
+                }
+                if (rowW > maxTableW) maxTableW = rowW;
+            }
+        }
+
+        // Bagi rata sisa lebar kertas ke kiri dan kanan agar dokumen presisi di tengah
+        var sidePt = 28;
+        if (maxTableW > 0 && maxTableW < A4_W - 20) {
+            sidePt = Math.floor((A4_W - maxTableW) / 2);
+        }
+
+        body.setPageWidth(A4_W);
+        body.setPageHeight(A4_H);
         body.setMarginTop(topPt);
         body.setMarginBottom(bottomPt);
         body.setMarginLeft(sidePt);
         body.setMarginRight(sidePt);
 
-        // Hapus atau ciutkan paragraf kosong di awal body dokumen
-        while (body.getNumChildren() > 1) {
-            var firstChild = body.getChild(0);
-            if (firstChild.getType() === DocumentApp.ElementType.PARAGRAPH) {
-                var p = firstChild.asParagraph();
-                if (!p.getText() || p.getText().trim() === '') {
-                    try {
-                        p.removeFromParent();
-                    } catch (e) {
-                        p.setFontSize(1);
-                        p.setSpacingBefore(0);
-                        p.setSpacingAfter(0);
-                        p.setLineSpacing(0.01);
-                        break;
-                    }
-                } else {
-                    break;
-                }
-            } else {
-                break;
-            }
-        }
-
-        // Hilangkan spacing default pada semua paragraf
-        var numBodyChildren = body.getNumChildren();
-        for (var bi = 0; bi < numBodyChildren; bi++) {
-            var el = body.getChild(bi);
-            if (el.getType() === DocumentApp.ElementType.PARAGRAPH) {
-                try {
-                    el.asParagraph().setSpacingBefore(0).setSpacingAfter(0);
-                } catch (e) { }
-            }
-        }
-
-        var contentWidth = body.getPageWidth() - sidePt * 2;
-        var tables = body.getTables();
-        for (var i = 0; i < tables.length; i++) {
-            var table = tables[i];
-            var numRows = table.getNumRows();
-            var numCols = numRows > 0 ? table.getRow(0).getNumCells() : 0;
-            var totalW = 0;
-            var colW = [];
-            for (var c = 0; c < numCols; c++) {
-                var w = 0;
-                try { w = table.getColumnWidth(c); } catch (e) { }
-                colW.push(w);
-                totalW += w;
-            }
-            if (totalW > 0) {
-                var scale = contentWidth / totalW;
-                for (var c2 = 0; c2 < numCols; c2++) {
-                    try { table.setColumnWidth(c2, colW[c2] * scale); } catch (e) { }
-                }
-            }
-            for (var r = 0; r < numRows; r++) {
-                var nCells = table.getRow(r).getNumCells();
-                for (var c3 = 0; c3 < nCells; c3++) {
-                    var cell = table.getRow(r).getCell(c3);
-                    try { cell.setVerticalAlignment(DocumentApp.VerticalAlignment.CENTER); } catch (e) { }
-                    try { cell.setPaddingTop(2).setPaddingBottom(2); } catch (e) { }
-                    var paras = cell.getParagraphs();
-                    for (var p = 0; p < paras.length; p++) {
-                        try { paras[p].setSpacingBefore(0).setSpacingAfter(0); } catch (e) { }
-                    }
-                }
-            }
-        }
-        return true;
+        doc.saveAndClose();
+        Logger.log('applyPdfDocFormatting_ sukses: sidePt=' + sidePt + ' (lebar tabel=' + maxTableW + 'pt)');
+        return { ok: true, top: topPt, left: sidePt, bottom: bottomPt };
     } catch (e) {
-        Logger.log('applyPdfDocFormatting_ error: ' + e.message);
-        return false;
+        Logger.log('applyPdfDocFormatting_ gagal: ' + e.message);
+        return { ok: false, reason: e.message };
+    }
+}
+
+function pdfMarginTest() {
+    var out = [];
+    var doc = null;
+    try {
+        doc = DocumentApp.create('Tes Margin PDF ' + Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyyMMdd-HHmmss'));
+        var body = doc.getBody();
+        body.setPageWidth(595.28);
+        body.setPageHeight(841.89);
+        body.setMarginTop(12);
+        body.setMarginBottom(24);
+        body.setMarginLeft(28);
+        body.setMarginRight(28);
+        doc.saveAndClose();
+        Utilities.sleep(500);
+        var doc2 = DocumentApp.openById(doc.getId());
+        var b2 = doc2.getBody();
+        out.push('OK A4 top=' + b2.getMarginTop() + ' left=' + b2.getMarginLeft() + ' bottom=' + b2.getMarginBottom());
+    } catch (e) {
+        out.push('GAGAL: ' + e.message);
     } finally {
         if (doc) {
-            try { doc.saveAndClose(); } catch (eSave) {
-                Logger.log('applyPdfDocFormatting_ saveAndClose error: ' + eSave.message);
-            }
+            try { DriveApp.getFileById(doc.getId()).setTrashed(true); } catch (e) { }
         }
+    }
+    var msg = out.join(' | ');
+    Logger.log('pdfMarginTest: ' + msg);
+    try {
+        var ss = SpreadsheetApp.openById(getSpreadsheetId());
+        var sheet = ss.getSheetByName(KIRIM_SHEET_NAME);
+        if (sheet) {
+            sheet.getRange(1, 73).setValue('Tes Margin PDF');
+            sheet.getRange(2, 73).setValue(msg);
+        }
+    } catch (e) {
+        Logger.log('pdfMarginTest catat sheet gagal: ' + e.message);
+    }
+    return msg;
+}
+
+/**
+ * Uji Cetak PDF Surat Keterangan Remedial (Simpan ke Google Drive)
+ * Jalankan fungsi ini dari Apps Script editor untuk memeriksa tata letak visual PDF.
+ */
+function testGenerateAccPdf() {
+    try {
+        var sampleStudent = {
+            npm: '2108260001',
+            nama: 'Fulan bin Fulan',
+            hp: '081234567890',
+            semester: '5',
+            angkatan: '2024',
+            pasfotoUrl: ''
+        };
+
+        var sampleDecisions = [
+            { name: 'Ilmu Bedah', semester: '5', sks: '3', status: 'ACC' },
+            { name: 'Ilmu Penyakit Dalam', semester: '5', sks: '4', status: 'ACC' },
+            { name: 'Farmakologi Klinik', semester: '3', sks: '2', status: 'ACC' }
+        ];
+
+        var html = buildAccLetterHtml_(sampleStudent, sampleDecisions);
+        var fileName = 'Tes_Surat_Remedial_' + sampleStudent.npm + '_' + Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyyMMdd_HHmmss');
+        var pdfResult = htmlToPdfBlob_(html, fileName);
+
+        var folderId = getFolderId();
+        var folder = DriveApp.getFolderById(folderId) || DriveApp.getRootFolder();
+        var file = folder.createFile(pdfResult.blob);
+
+        var fileUrl = file.getUrl();
+        Logger.log('=== HASIL TES CETAK PDF ===');
+        Logger.log('Nama File : ' + fileName + '.pdf');
+        Logger.log('Link PDF  : ' + fileUrl);
+        Logger.log('Status Margin: ' + (pdfResult.formatted ? 'Tersusun rapi' : 'Default'));
+        
+        return {
+            status: 'success',
+            fileUrl: fileUrl,
+            fileName: fileName + '.pdf'
+        };
+    } catch (error) {
+        Logger.log('Error testGenerateAccPdf: ' + error.message);
+        throw new Error('Gagal mencetak PDF tes: ' + error.message);
     }
 }
 
@@ -4174,15 +4294,26 @@ function sendAccEmailWithPdf_(ss, npm, force) {
     var decisions = collectDecisions_(ss, npmClean);
     if (!decisions || decisions.length === 0) return { status: 'skipped', message: 'Belum ada keputusan' };
 
-    var pdfBlob = htmlToPdfBlob_(buildAccLetterHtml_(student, decisions), 'surat-remedial-' + npmClean);
+    var pdfResult = htmlToPdfBlob_(buildAccLetterHtml_(student, decisions), 'surat-remedial-' + npmClean);
     MailApp.sendEmail({
         to: student.email,
         subject: 'Hasil Pemeriksaan Pendaftaran Remedial Semester ' + getPeriodeLabel_() + ' - FKIK UMSU',
         htmlBody: buildAccEmailBodyHtml_(student, decisions),
-        attachments: [pdfBlob],
+        attachments: [pdfResult.blob],
         name: 'FKIK UMSU - Pendaftaran Remedial'
     });
     kirimSheet.getRange(rowIdx, EMAIL_ACC_COL).setValue('SENT');
+    try {
+        var marginCol = EMAIL_ACC_COL + 1;
+        var hdrVal = String(kirimSheet.getRange(1, marginCol).getValue() || '').trim();
+        if (!hdrVal) kirimSheet.getRange(1, marginCol).setValue('Margin PDF (pt)');
+        var m = pdfResult.margins || null;
+        var note = (m && m.ok) ? ('top=' + m.top + ' left=' + m.left + ' bottom=' + m.bottom)
+            : ('gagal' + (m && m.reason ? ': ' + m.reason : ', pakai margin default'));
+        kirimSheet.getRange(rowIdx, marginCol).setValue(note);
+    } catch (e) {
+        Logger.log('sendAccEmailWithPdf_ catat margin gagal: ' + e.message);
+    }
     return { status: 'success', message: 'Email ACC terkirim' };
 }
 
@@ -4249,6 +4380,7 @@ function verifyPembayaran(token, npm) {
     for (var i = 0; i < npmValues.length; i++) {
         if (normalizeNpm_(npmValues[i][0]) === npmClean) {
             sheet.getRange(i + 2, verifIdx + 1).setValue('Sudah Diverifikasi');
+            invalidateDashboardCache_();
             return { status: 'success', message: 'Pembayaran ' + npmClean + ' ditandai terverifikasi' };
         }
     }
@@ -4355,12 +4487,25 @@ function dashboardTests() {
 function resendAccEmail(token, npm) {
     requireAdmin_(token);
     var ss = SpreadsheetApp.openById(getSpreadsheetId());
-    return sendAccEmailWithPdf_(ss, normalizeNpm_(npm), true);
+    var result = sendAccEmailWithPdf_(ss, normalizeNpm_(npm), true);
+    invalidateDashboardCache_();
+    return result;
 }
 
 function getMkOptions(token) {
     requireAdmin_(token);
+    var cache = CacheService.getScriptCache();
+    var cached = cache.get(dashCacheKey_('mkOptions'));
+    if (cached) {
+        try { return JSON.parse(cached); } catch (e) { }
+    }
     var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var options = getMkOptionsWithSs_(ss);
+    try { cache.put(dashCacheKey_('mkOptions'), JSON.stringify(options), 300); } catch (e) { }
+    return options;
+}
+
+function getMkOptionsWithSs_(ss) {
     var mkSheet = ss.getSheetByName(MK_SHEET_NAME);
     var options = [];
     if (!mkSheet || mkSheet.getLastRow() < 2) return options;
@@ -4379,10 +4524,20 @@ function getMkOptions(token) {
 
 function getMkReviewData(token, mkName) {
     requireAdmin_(token);
-    var ss = SpreadsheetApp.openById(getSpreadsheetId());
     var mkKey = normalizeMkName_(mkName);
     if (!mkKey) throw new Error('Pilih mata kuliah terlebih dahulu');
+    var cache = CacheService.getScriptCache();
+    var cached = cache.get(dashCacheKey_('review_' + mkKey));
+    if (cached) {
+        try { return JSON.parse(cached); } catch (e) { }
+    }
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var result = getMkReviewDataUncached_(ss, mkName, mkKey);
+    try { cache.put(dashCacheKey_('review_' + mkKey), JSON.stringify(result), 20); } catch (e) { }
+    return result;
+}
 
+function getMkReviewDataUncached_(ss, mkName, mkKey) {
     var all = readPendaftaranStudents_(ss);
     var semester = '';
     var picked = [];
@@ -4449,6 +4604,7 @@ function updateStudentProfile(token, npm, fields) {
         } catch (syncErr) {
             Logger.log('updateStudentProfile sync warning: ' + syncErr.message);
         }
+        invalidateDashboardCache_();
         return getStudentDecisionStatus_(ss, npmClean);
     } finally {
         try { lock.releaseLock(); } catch (e) { }
@@ -4529,6 +4685,23 @@ function setConfig_(key, value) {
     sheet.appendRow([key, String(value)]);
 }
 
+/**
+ * Baca seluruh sheet Config sekali menjadi map {key: value}.
+ * Menghemat banyak bukaan spreadsheet dibanding memanggil getConfig_ berkali-kali.
+ */
+function readConfigMap_(ss) {
+    var map = {};
+    var sheet = ss.getSheetByName(CONFIG_SHEET_NAME);
+    if (sheet && sheet.getLastRow() > 1) {
+        var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+        for (var i = 0; i < data.length; i++) {
+            var k = String(data[i][0] || '').trim();
+            if (k) map[k] = String(data[i][1] || '').trim();
+        }
+    }
+    return map;
+}
+
 function formatConfigDate_(val) {
     if (!val) return '';
     var d = (val instanceof Date) ? val : parseDateValue_(val);
@@ -4545,19 +4718,20 @@ function parseConfigDate_(val) {
 function ensureConfigSeeded_() {
     var ss = SpreadsheetApp.openById(getSpreadsheetId());
     ensureConfigSheet_(ss);
-    if (getConfig_(CONFIG_KEYS.seeded)) return;
-    if (!getConfig_(CONFIG_KEYS.periode)) setConfig_(CONFIG_KEYS.periode, 'ganjil');
-    if (!getConfig_(CONFIG_KEYS.tahunAjaran)) setConfig_(CONFIG_KEYS.tahunAjaran, '');
+    var cfg = readConfigMap_(ss);
+    if (cfg[CONFIG_KEYS.seeded]) return;
+    if (!cfg[CONFIG_KEYS.periode]) setConfig_(CONFIG_KEYS.periode, 'ganjil');
+    if (!cfg[CONFIG_KEYS.tahunAjaran]) setConfig_(CONFIG_KEYS.tahunAjaran, '');
     var dmSheet = ss.getSheetByName('DM');
     if (dmSheet) {
         var d = dmSheet.getRange('G2:G4').getValues();
-        if (!getConfig_(CONFIG_KEYS.pendaftaranBuka)) setConfig_(CONFIG_KEYS.pendaftaranBuka, formatConfigDate_(d[0][0]));
-        if (!getConfig_(CONFIG_KEYS.pendaftaranTutup)) setConfig_(CONFIG_KEYS.pendaftaranTutup, formatConfigDate_(d[2][0]));
+        if (!cfg[CONFIG_KEYS.pendaftaranBuka]) setConfig_(CONFIG_KEYS.pendaftaranBuka, formatConfigDate_(d[0][0]));
+        if (!cfg[CONFIG_KEYS.pendaftaranTutup]) setConfig_(CONFIG_KEYS.pendaftaranTutup, formatConfigDate_(d[2][0]));
         var u = dmSheet.getRange('G8:G10').getValues();
-        if (!getConfig_(CONFIG_KEYS.uploadBuka)) setConfig_(CONFIG_KEYS.uploadBuka, formatConfigDate_(u[0][0]));
-        if (!getConfig_(CONFIG_KEYS.uploadTutup)) setConfig_(CONFIG_KEYS.uploadTutup, formatConfigDate_(u[2][0]));
+        if (!cfg[CONFIG_KEYS.uploadBuka]) setConfig_(CONFIG_KEYS.uploadBuka, formatConfigDate_(u[0][0]));
+        if (!cfg[CONFIG_KEYS.uploadTutup]) setConfig_(CONFIG_KEYS.uploadTutup, formatConfigDate_(u[2][0]));
     }
-    if (!getConfig_(CONFIG_KEYS.uploadMode)) {
+    if (!cfg[CONFIG_KEYS.uploadMode]) {
         var mode = 'default';
         var mkSheet = ss.getSheetByName('MK');
         if (mkSheet) {
@@ -4566,7 +4740,7 @@ function ensureConfigSeeded_() {
         }
         setConfig_(CONFIG_KEYS.uploadMode, mode);
     }
-    if (!getConfig_(CONFIG_KEYS.pdfLogoUrl)) setConfig_(CONFIG_KEYS.pdfLogoUrl, DEFAULT_PDF_LOGO_URL);
+    if (!cfg[CONFIG_KEYS.pdfLogoUrl]) setConfig_(CONFIG_KEYS.pdfLogoUrl, DEFAULT_PDF_LOGO_URL);
     setConfig_(CONFIG_KEYS.seeded, '1');
 }
 
@@ -4577,6 +4751,12 @@ function ensureConfigSeeded_() {
 function getSettings(token) {
     requireAdmin_(token);
     ensureConfigSeeded_();
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    return buildSettingsResponse_(ss);
+}
+
+function buildSettingsResponse_(ss) {
+    var cfg = readConfigMap_(ss);
     var now = new Date();
     function scheduleStatus_(buka, tutup) {
         var b = parseConfigDate_(buka);
@@ -4588,25 +4768,42 @@ function getSettings(token) {
     }
     return {
         status: 'success',
-        periode: getConfig_(CONFIG_KEYS.periode) || 'ganjil',
-        tahunAjaran: getConfig_(CONFIG_KEYS.tahunAjaran) || '',
+        periode: cfg[CONFIG_KEYS.periode] || 'ganjil',
+        tahunAjaran: cfg[CONFIG_KEYS.tahunAjaran] || '',
         jadwal: {
             pendaftaran: {
-                buka: getConfig_(CONFIG_KEYS.pendaftaranBuka),
-                tutup: getConfig_(CONFIG_KEYS.pendaftaranTutup),
-                status: scheduleStatus_(getConfig_(CONFIG_KEYS.pendaftaranBuka), getConfig_(CONFIG_KEYS.pendaftaranTutup))
+                buka: cfg[CONFIG_KEYS.pendaftaranBuka] || '',
+                tutup: cfg[CONFIG_KEYS.pendaftaranTutup] || '',
+                status: scheduleStatus_(cfg[CONFIG_KEYS.pendaftaranBuka], cfg[CONFIG_KEYS.pendaftaranTutup])
             },
             upload: {
-                buka: getConfig_(CONFIG_KEYS.uploadBuka),
-                tutup: getConfig_(CONFIG_KEYS.uploadTutup),
-                status: scheduleStatus_(getConfig_(CONFIG_KEYS.uploadBuka), getConfig_(CONFIG_KEYS.uploadTutup))
+                buka: cfg[CONFIG_KEYS.uploadBuka] || '',
+                tutup: cfg[CONFIG_KEYS.uploadTutup] || '',
+                status: scheduleStatus_(cfg[CONFIG_KEYS.uploadBuka], cfg[CONFIG_KEYS.uploadTutup])
             }
         },
-        uploadMode: getConfig_(CONFIG_KEYS.uploadMode) || 'default',
+        uploadMode: cfg[CONFIG_KEYS.uploadMode] || 'default',
         pdf: {
-            logoUrl: getConfig_(CONFIG_KEYS.pdfLogoUrl) || DEFAULT_PDF_LOGO_URL,
-            ttdUrl: getConfig_(CONFIG_KEYS.pdfTtdUrl) || ''
+            logoUrl: cfg[CONFIG_KEYS.pdfLogoUrl] || DEFAULT_PDF_LOGO_URL,
+            ttdUrl: cfg[CONFIG_KEYS.pdfTtdUrl] || ''
         }
+    };
+}
+
+/**
+ * Bootstrap: satu panggilan untuk login/layout awal dashboard.
+ * Menggantikan getSettings + getDashboardData + getMkOptions + getMkAdminData
+ * yang sebelumnya dipanggil terpisah (beberapa eksekusi Apps Script).
+ */
+function getDashboardBootstrap(token) {
+    requireAdmin_(token);
+    ensureConfigSeeded_();
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    return {
+        settings: buildSettingsResponse_(ss),
+        dashboard: getDashboardDataWithSs_(ss, {}),
+        mkOptions: getMkOptionsWithSs_(ss),
+        mkAdminData: getMkAdminDataWithSs_(ss)
     };
 }
 
@@ -4633,6 +4830,7 @@ function saveSettings(token, data) {
         if (data.uploadMode === 'default' || data.uploadMode === 'bypass') setConfig_(CONFIG_KEYS.uploadMode, data.uploadMode);
         if (data.pdfLogoUrl != null) setConfig_(CONFIG_KEYS.pdfLogoUrl, String(data.pdfLogoUrl).trim());
         if (data.pdfTtdUrl != null) setConfig_(CONFIG_KEYS.pdfTtdUrl, String(data.pdfTtdUrl).trim());
+        invalidateDashboardCache_();
         return { status: 'success', message: 'Pengaturan tersimpan' };
     } finally {
         try { lock.releaseLock(); } catch (e) { }
@@ -4640,8 +4838,8 @@ function saveSettings(token, data) {
 }
 
 var MK_GENAP_COL_MAP = [
-    { mkSheetCol: 8, semLabel: 'Sem2', startIdx: 9, slots: 7 },   // H (paralel J:P)
-    { mkSheetCol: 9, semLabel: 'Sem4', startIdx: 16, slots: 7 },  // I (paralel Q:W)
+    { mkSheetCol: 8,  semLabel: 'Sem2', startIdx: 9, slots: 7 },   // H (paralel J:P)
+    { mkSheetCol: 9,  semLabel: 'Sem4', startIdx: 16, slots: 7 },  // I (paralel Q:W)
     { mkSheetCol: 10, semLabel: 'Sem6', startIdx: 23, slots: 7 },  // J (paralel X:AD)
     { mkSheetCol: 11, semLabel: 'Sem8', startIdx: 30, slots: 7 }   // K (paralel AE:AK)
 ];
@@ -4658,6 +4856,10 @@ function ensureMkGenapHeaders_(mkSheet) {
 function getMkAdminData(token) {
     requireAdmin_(token);
     var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    return getMkAdminDataWithSs_(ss);
+}
+
+function getMkAdminDataWithSs_(ss) {
     var mkSheet = ss.getSheetByName(MK_SHEET_NAME);
     var result = { ganjil: {}, genap: {}, masterSks: {} };
     if (!mkSheet || mkSheet.getLastRow() < 2) return result;
@@ -4725,6 +4927,7 @@ function saveMkAdminData(token, set, semester, slots) {
             var sk = (it && it.sks != null) ? String(it.sks).trim() : '';
             upsertMkSks_(mkSheet, nm, sk);
         }
+        invalidateDashboardCache_();
         return { status: 'success', message: 'MK ' + cfg.semLabel + ' tersimpan' };
     } finally {
         try { lock.releaseLock(); } catch (e) { }
